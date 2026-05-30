@@ -1,0 +1,189 @@
+"""Execute a generated script via pytest-playwright and collect objective metrics."""
+
+from __future__ import annotations
+
+import json
+import logging
+import subprocess
+import sys
+import tempfile
+from collections import defaultdict
+from pathlib import Path
+
+from config.settings import GENERATED_DIR, Settings, get_settings
+from tcgen.orchestration.models import ExecutionResult, GeneratedScript
+from tcgen.runner.metrics import objective
+
+log = logging.getLogger(__name__)
+
+# Shared pytest harness written next to every generated script. Applied
+# uniformly to all pipelines so the comparison stays fair: it (a) bounds the
+# per-action timeout so broken scripts fail fast instead of hanging on the 30s
+# Playwright default, and (b) auto-dismisses welcome dialogs / cookie banners
+# after each navigation (these otherwise intercept every click on SPAs).
+_CONFTEST_TEMPLATE = '''\
+"""Auto-generated shared test harness (do not edit; rewritten on each run)."""
+
+import re
+import pytest
+
+
+def _dismiss_overlays(page) -> None:
+    candidates = []
+    try:
+        candidates.append(page.get_by_label("Close Welcome Banner"))
+    except Exception:
+        pass
+    for _name in ("Me want it!", "Dismiss"):
+        try:
+            candidates.append(page.get_by_text(_name, exact=False))
+        except Exception:
+            pass
+    try:
+        candidates.append(page.get_by_role(
+            "button", name=re.compile(r"(?i)\\b(dismiss|got it|accept|agree|close|ok)\\b")))
+    except Exception:
+        pass
+    for _loc in candidates:
+        try:
+            _t = _loc.first
+            if _t.count() > 0 and _t.is_visible():
+                _t.click(timeout=1200)
+                page.wait_for_timeout(200)
+        except Exception:
+            continue
+
+
+@pytest.fixture(autouse=True)
+def _harness(page):
+    page.set_default_timeout({timeout})
+    _orig_goto = page.goto
+
+    def _goto(url, **kwargs):
+        result = _orig_goto(url, **kwargs)
+        try:
+            page.wait_for_load_state("domcontentloaded")
+        except Exception:
+            pass
+        _dismiss_overlays(page)
+        return result
+
+    page.goto = _goto
+    yield
+'''
+
+
+class TestRunner:
+    def __init__(self, settings: Settings | None = None, *, run_timeout_s: int = 300):
+        self.settings = settings or get_settings()
+        self.run_timeout_s = run_timeout_s
+
+    def run(self, script: GeneratedScript, phase=None) -> ExecutionResult:
+        from tcgen.progress import NullPhase
+
+        phase = phase or NullPhase()
+        path = self._materialise(script)
+        runs: list[dict] = []
+        n = max(1, self.settings.flakiness_runs)
+        for i in range(n):
+            phase.update(i / n, f"pytest-Lauf {i + 1}/{n} ({script.pipeline.script_label})")
+            runs.append(self._run_once(path, label=f"{script.pipeline.value}_{i}"))
+        phase.update(1.0, f"Ausführung fertig: {runs[0]['n_passed']}/{runs[0]['n_tests']} grün")
+
+        first = runs[0]
+        n_tests = first["n_tests"]
+        n_passed = first["n_passed"]
+        n_failed = first["n_failed"]
+
+        return ExecutionResult(
+            executed=first["executed"],
+            passed=(n_tests > 0 and n_failed == 0 and first["executed"]),
+            n_tests=n_tests,
+            n_passed=n_passed,
+            n_failed=n_failed,
+            duration_s=round(first["duration"], 2),
+            ssr=objective.successful_steps_ratio(n_passed, n_tests),
+            element_coverage=objective.element_coverage(script.code),
+            flakiness=self._flakiness(runs),
+            stdout=first["stdout"][-4000:],
+            stderr=first["stderr"][-4000:],
+        )
+
+    # ------------------------------------------------------------------ #
+    def _materialise(self, script: GeneratedScript) -> Path:
+        out_dir = GENERATED_DIR / script.app_key
+        out_dir.mkdir(parents=True, exist_ok=True)
+        self._write_conftest(out_dir)
+        path = out_dir / f"test_{script.pipeline.value}.py"
+        path.write_text(script.code, encoding="utf-8")
+        if script.path is None:
+            script.path = str(path)
+        return path
+
+    def _write_conftest(self, out_dir: Path) -> None:
+        conftest = _CONFTEST_TEMPLATE.format(timeout=self.settings.test_action_timeout_ms)
+        (out_dir / "conftest.py").write_text(conftest, encoding="utf-8")
+
+    def _run_once(self, path: Path, *, label: str) -> dict:
+        report = Path(tempfile.gettempdir()) / f"tcgen_report_{label}.json"
+        cmd = [
+            sys.executable, "-m", "pytest", str(path),
+            "-p", "no:cacheprovider", "-q",
+            "--browser", "chromium",
+            "--json-report", f"--json-report-file={report}",
+        ]
+        if not self.settings.headless:
+            cmd.append("--headed")
+        try:
+            proc = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=self.run_timeout_s,
+                cwd=str(GENERATED_DIR.parent),
+            )
+            stdout, stderr, rc = proc.stdout, proc.stderr, proc.returncode
+        except subprocess.TimeoutExpired as exc:
+            return {"executed": False, "n_tests": 0, "n_passed": 0, "n_failed": 0,
+                    "duration": float(self.run_timeout_s), "outcomes": {},
+                    "stdout": exc.stdout or "", "stderr": "TIMEOUT"}
+
+        parsed = self._parse_report(report)
+        # rc 2 == collection/usage error -> the script did not even import/collect.
+        parsed["executed"] = rc != 2 and parsed["n_tests"] >= 0 and "INTERNALERROR" not in stderr
+        parsed["stdout"] = stdout
+        parsed["stderr"] = stderr
+        return parsed
+
+    @staticmethod
+    def _parse_report(report: Path) -> dict:
+        base = {"executed": False, "n_tests": 0, "n_passed": 0, "n_failed": 0,
+                "duration": 0.0, "outcomes": {}}
+        if not report.exists():
+            return base
+        try:
+            data = json.loads(report.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return base
+        summary = data.get("summary", {})
+        tests = data.get("tests", [])
+        outcomes = {t.get("nodeid", str(i)): t.get("outcome", "error")
+                    for i, t in enumerate(tests)}
+        return {
+            "n_tests": summary.get("total", len(tests)),
+            "n_passed": summary.get("passed", 0),
+            "n_failed": summary.get("failed", 0) + summary.get("error", 0),
+            "duration": data.get("duration", 0.0),
+            "outcomes": outcomes,
+        }
+
+    @staticmethod
+    def _flakiness(runs: list[dict]) -> float:
+        """Fraction of tests whose pass/fail outcome was not unanimous across runs."""
+        if len(runs) < 2:
+            return 0.0
+        per_test: dict[str, set[str]] = defaultdict(set)
+        for r in runs:
+            for nodeid, outcome in r.get("outcomes", {}).items():
+                per_test[nodeid].add("passed" if outcome == "passed" else "failed")
+        if not per_test:
+            return 0.0
+        unstable = sum(1 for outcomes in per_test.values() if len(outcomes) > 1)
+        return round(unstable / len(per_test), 4)

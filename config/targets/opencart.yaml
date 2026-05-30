@@ -1,0 +1,63 @@
+key: opencart
+name: OpenCart Storefront
+# Self-hosted recommended (Docker). The public demo at https://demo.opencart.com
+# resets periodically and rate-limits, so prefer a local instance for reproducible runs.
+base_url: "http://localhost:8080"
+description: >
+  Standard OpenCart demo storefront (default catalog). Used as a representative,
+  stateful e-commerce web UI: search, product detail, cart, and guest checkout.
+
+username: null
+password: null
+
+entry_paths:
+  - "/"
+  - "/index.php?route=product/search"
+
+# Pages the crawler/agent should not wander into (keeps runs deterministic
+# and avoids destructive admin actions).
+avoid_url_substrings:
+  - "route=account/logout"
+  - "admin"
+  - "index.php?route=checkout/checkout"  # only reached deliberately via US-3
+
+user_stories:
+  - id: "US-1"
+    title: "Produktsuche"
+    text: >
+      Als Besucher möchte ich über die Suchleiste nach einem Produkt suchen,
+      damit ich passende Artikel im Katalog finde.
+    acceptance_criteria:
+      - "Eine Suche nach 'MacBook' liefert eine Ergebnisliste."
+      - "Mindestens ein Ergebnis enthält den Suchbegriff im Produktnamen."
+      - "Die Ergebnisseite zeigt die verwendete Suchanfrage an."
+
+  - id: "US-2"
+    title: "Produkt in den Warenkorb legen"
+    text: >
+      Als Besucher möchte ich ein Produkt in den Warenkorb legen,
+      damit ich es später kaufen kann.
+    acceptance_criteria:
+      - "Nach 'In den Warenkorb' erscheint eine Erfolgsmeldung."
+      - "Der Warenkorb-Zähler im Header zeigt mindestens 1 Artikel."
+      - "Die Warenkorb-Übersicht listet das hinzugefügte Produkt."
+
+  - id: "US-3"
+    title: "Gast-Checkout"
+    text: >
+      Als Besucher möchte ich als Gast zur Kasse gehen,
+      damit ich ohne Konto eine Bestellung anstoßen kann.
+    acceptance_criteria:
+      - "Mit Artikel im Warenkorb ist der Checkout erreichbar."
+      - "Die Gast-Checkout-Option lässt sich auswählen."
+      - "Das Formular für Rechnungsdaten wird angezeigt."
+
+  - id: "US-4"
+    title: "Konto registrieren"
+    text: >
+      Als neuer Nutzer möchte ich ein Konto anlegen,
+      damit ich meine Bestellungen verwalten kann.
+    acceptance_criteria:
+      - "Das Registrierungsformular ist über das Account-Menü erreichbar."
+      - "Pflichtfelder (Vorname, Nachname, E-Mail) sind vorhanden."
+      - "Nach gültiger Eingabe erscheint eine Bestätigungsseite."

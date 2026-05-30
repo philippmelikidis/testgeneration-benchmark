@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Environment / secrets
+.env
+.venv/
+venv/
+
+# Scratch
+_probe
+
+# Generated artefacts and run outputs (keep the placeholder dirs)
+generated/*/
+results/*.json
+results/jobs/
+!generated/.gitkeep
+!results/.gitkeep
+test-results/

@@ -1,0 +1,64 @@
+key: juiceshop
+name: OWASP Juice Shop
+# Official, actively maintained image, boots ready (no install wizard):
+#   docker run -d --name juiceshop -p 3000:3000 bkimminich/juice-shop
+base_url: "http://localhost:3000"
+description: >
+  OWASP Juice Shop — a modern Angular single-page e-commerce app. Representative
+  stateful Web UI with hash routing, dialogs, and a cookie/welcome banner; good
+  stress test for both pipelines. Boots ready, which keeps runs reproducible.
+
+username: null
+password: null
+
+entry_paths:
+  - "/#/"
+  - "/#/search"
+
+# Keep runs deterministic and away from CTF/admin areas.
+avoid_url_substrings:
+  - "#/administration"
+  - "score-board"
+  - "#/logout"
+  - "#/complain"
+
+user_stories:
+  - id: "US-1"
+    title: "Produktsuche"
+    text: >
+      Als Besucher möchte ich über die Suchfunktion nach einem Produkt suchen,
+      damit ich passende Artikel im Shop finde.
+    acceptance_criteria:
+      - "Über das Such-Icon im Header lässt sich ein Suchfeld öffnen."
+      - "Eine Suche nach 'Apple' liefert eine Ergebnisliste mit Produktkacheln."
+      - "Die Ergebnisse enthalten mindestens eine Produktkarte."
+
+  - id: "US-2"
+    title: "Produktdetails öffnen"
+    text: >
+      Als Besucher möchte ich die Detailansicht eines Produkts öffnen,
+      damit ich Beschreibung und Preis sehe.
+    acceptance_criteria:
+      - "Ein Klick auf eine Produktkarte öffnet einen Detail-Dialog."
+      - "Der Dialog zeigt Produktname und Preis."
+      - "Der Dialog lässt sich wieder schließen."
+
+  - id: "US-3"
+    title: "Konto registrieren"
+    text: >
+      Als neuer Nutzer möchte ich ein Kundenkonto anlegen,
+      damit ich später einkaufen kann.
+    acceptance_criteria:
+      - "Die Registrierungsseite ist unter /#/register erreichbar."
+      - "Pflichtfelder E-Mail, Passwort und Passwort-Wiederholung sind vorhanden."
+      - "Eine Sicherheitsfrage muss ausgewählt werden."
+
+  - id: "US-4"
+    title: "Cookie-/Willkommens-Banner schließen"
+    text: >
+      Als Besucher möchte ich den Willkommens-Dialog und das Cookie-Banner
+      schließen, damit ich ungehindert einkaufen kann.
+    acceptance_criteria:
+      - "Der Willkommens-Dialog lässt sich über 'Dismiss' schließen."
+      - "Das Cookie-Banner lässt sich über 'Me want it!' bestätigen."
+      - "Nach dem Schließen ist die Produktliste sichtbar."
