@@ -11,6 +11,10 @@ venv/
 # Scratch
 _probe
 
+# DeepEval telemetry/cache
+.deepeval/
+.deepeval*
+
 # Generated artefacts and run outputs (keep the placeholder dirs)
 generated/*/
 results/*.json
