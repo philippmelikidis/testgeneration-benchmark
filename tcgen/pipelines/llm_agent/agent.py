@@ -1,4 +1,7 @@
-"""LLM agent: explore a live app from user stories, then synthesise Skript_L."""
+"""LLM agent: explore a live app autonomously (no user story), then synthesise
+Skript_L. The agent's task is identical to the crawler's — requirement knowledge
+enters only in Methode 2 (the hybrid refiner). ``_story_block`` is kept here and
+reused by the refiner/experiment for the story-aware Skript_H path."""
 
 from __future__ import annotations
 
@@ -39,8 +42,7 @@ class LLMAgent:
     def generate(self, phase: Phase | None = None) -> GeneratedScript:
         phase = phase or NullPhase()
         t0 = time.time()
-        stories = self.target.user_stories
-        phase.update(0.02, "Agent startet Exploration (Crawler-Aufgabe, Stories als Kontext)")
+        phase.update(0.02, "Agent startet Exploration (Crawler-Aufgabe, ohne User-Story)")
         with BrowserSession(
             self.target.base_url,
             headless=self.settings.headless,
@@ -48,10 +50,10 @@ class LLMAgent:
             settle_pause_ms=self.settings.settle_pause_ms,
         ) as session:
             observation = session.navigate(self.target.entry_paths[0])
-            action_log, pages = self._explore(session, stories, observation, phase)
+            action_log, pages = self._explore(session, observation, phase)
         phase.update(0.9, "Synthese der Testsuite aus Beobachtungen")
         transcript = self._build_transcript(action_log, pages)
-        code = self._synthesize(stories, transcript)
+        code = self._synthesize(transcript)
         phase.update(1.0, f"Skript_L erzeugt ({len(code.splitlines())} Zeilen)")
         return GeneratedScript(
             pipeline=Pipeline.LLM_AGENT,
@@ -64,13 +66,12 @@ class LLMAgent:
             meta={
                 "agent_steps": len(action_log),
                 "pages_observed": len(pages),
-                "user_stories": [s.id for s in stories],
+                "user_story_used": False,
             },
         )
 
     # ------------------------------------------------------------------ #
-    def _explore(self, session: BrowserSession, stories, observation, phase: Phase):
-        goals = _story_block(stories)
+    def _explore(self, session: BrowserSession, observation, phase: Phase):
         action_log: list[str] = []
         pages: dict[str, str] = {}  # url -> digest (deduplicated)
         max_steps = self.settings.agent_max_steps
@@ -80,7 +81,8 @@ class LLMAgent:
             phase.update(0.02 + 0.86 * (step / max_steps),
                          f"Agent: Schritt {step + 1}/{max_steps} · {session.page.url}")
             user = (
-                f"GOALS (user stories to test):\n{goals}\n\n"
+                "GOAL: explore the application broadly to map its main "
+                "user-facing flows (navigation, search, forms, detail views).\n\n"
                 f"ACTION LOG SO FAR:\n" + ("\n".join(action_log) or "(none)") + "\n\n"
                 f"CURRENT OBSERVATION:\n{observation}\n\n"
                 "Reply with the next action as a single JSON object."
@@ -125,11 +127,11 @@ class LLMAgent:
             parts.append(f"\n--- {url} ---\n{truncate(digest, 1200)}")
         return truncate("\n".join(parts), 6000)
 
-    def _synthesize(self, stories, transcript: str) -> str:
+    def _synthesize(self, transcript: str) -> str:
         messages: list[Message] = [
             {"role": "system", "content": SYNTHESIS_SYSTEM},
             {"role": "user", "content": synthesis_user_prompt(
-                self.target.base_url, _story_block(stories), transcript)},
+                self.target.base_url, transcript)},
         ]
         reply = self.provider.chat(messages)
         return extract_code_block(reply)

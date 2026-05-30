@@ -68,7 +68,10 @@ def _harness(page):
         _dismiss_overlays(page)
         return result
 
-    page.goto = _goto
+    try:
+        page.goto = _goto  # best-effort; if the Page forbids it, run unpatched
+    except Exception:
+        pass
     yield
 '''
 
@@ -146,8 +149,14 @@ class TestRunner:
                     "stdout": exc.stdout or "", "stderr": "TIMEOUT"}
 
         parsed = self._parse_report(report)
-        # rc 2 == collection/usage error -> the script did not even import/collect.
-        parsed["executed"] = rc != 2 and parsed["n_tests"] >= 0 and "INTERNALERROR" not in stderr
+        # "executed" means: the module imported/collected AND ran at least one
+        # test. rc 2 = usage/collection error, rc 5 = no tests collected; both
+        # mean the script is not a usable test suite.
+        parsed["executed"] = (
+            rc not in (2, 5)
+            and parsed["n_tests"] > 0
+            and "INTERNALERROR" not in stderr
+        )
         parsed["stdout"] = stdout
         parsed["stderr"] = stderr
         return parsed

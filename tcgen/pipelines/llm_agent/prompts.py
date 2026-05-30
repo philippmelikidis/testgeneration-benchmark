@@ -2,9 +2,9 @@
 
 Methode 1 framing: the agent performs the *same task as the crawler* — explore
 the application autonomously and produce a test suite covering the flows it
-finds. The user stories are passed as *additional context* to prioritise, not as
-the sole objective. This keeps the crawler-vs-agent comparison on the same task
-domain while still letting the LLM use requirement knowledge.
+finds. It receives **no user story** (the requirement knowledge only enters in
+Methode 2, the hybrid refiner). This keeps the crawler-vs-agent comparison on an
+identical, requirement-free task.
 """
 
 EXPLORE_SYSTEM = """\
@@ -23,9 +23,8 @@ Respond with EXACTLY ONE JSON object and nothing else, in this shape:
 Rules:
 - Use the element refs (e1, e2, ...) shown in the OBSERVATION to target clicks
   and fills. Never invent a ref that was not listed.
-- Aim for broad coverage of the application's main flows (navigation, search,
-  forms, detail views). The user stories in the context tell you which areas
-  matter most, but do not restrict yourself to them.
+- Aim for broad coverage of the application's main flows: navigation, search,
+  forms, and detail views.
 - Call "finish" once you have seen enough distinct flows to write a useful suite.
 - Do not attempt logout, payment confirmation, or destructive actions.
 """
@@ -52,19 +51,13 @@ Hard requirements:
 - A shared test harness already runs automatically: it bounds action timeouts
   and dismisses the welcome dialog / cookie banner after each navigation, so you
   do NOT need to handle those overlays yourself — just navigate and act.
-- Treat the user stories as priorities: cover the flows they describe, plus
-  other important flows you found.
 - Output ONLY the Python code in a single ```python fenced block. No prose.
 """
 
 
-def synthesis_user_prompt(base_url: str, story_block: str, transcript: str) -> str:
-    context = story_block.strip() or "(no user stories provided — cover the app broadly)"
+def synthesis_user_prompt(base_url: str, transcript: str) -> str:
     return f"""\
 BASE URL: {base_url}
-
-CONTEXT — user stories to prioritise (not the only thing to cover):
-{context}
 
 WHAT YOU OBSERVED WHILE EXPLORING (urls, elements, page text):
 {transcript}
