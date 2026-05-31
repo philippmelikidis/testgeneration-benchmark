@@ -22,6 +22,26 @@ from urllib.parse import urlparse
 # Returns a JSON-serialisable list of descriptors.
 HARVEST_JS = r"""
 () => {
+  const cssFor = (el) => {
+    if (el.id) return '#' + CSS.escape(el.id);
+    const parts = [];
+    let node = el;
+    while (node && node.nodeType === 1 && parts.length < 5) {
+      if (node.id) { parts.unshift('#' + CSS.escape(node.id)); break; }
+      let part = node.tagName.toLowerCase();
+      const parent = node.parentElement;
+      if (parent) {
+        const sameTag = Array.from(parent.children)
+          .filter(c => c.tagName === node.tagName);
+        if (sameTag.length > 1) {
+          part += ':nth-of-type(' + (sameTag.indexOf(node) + 1) + ')';
+        }
+      }
+      parts.unshift(part);
+      node = node.parentElement;
+    }
+    return parts.join(' > ');
+  };
   const out = [];
   const sels = 'a[href], button, [role="button"], input, select, textarea, [onclick]';
   const seen = new Set();
@@ -46,8 +66,9 @@ HARVEST_JS = r"""
       placeholder: el.getAttribute('placeholder') || '',
       testid: el.getAttribute('data-testid') || el.getAttribute('data-test') || '',
       href: el.getAttribute('href') || '',
+      css: cssFor(el),
     };
-    const key = [tag, type, desc.text, desc.id, desc.nameAttr, desc.href].join('|');
+    const key = [tag, type, desc.text, desc.id, desc.nameAttr, desc.href, desc.css].join('|');
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(desc);
@@ -71,6 +92,7 @@ class ElementDescriptor:
     placeholder: str = ""
     testid: str = ""
     href: str = ""
+    css: str = ""  # unique-ish CSS path (id or nth-of-type chain) computed in JS
 
     # --- classification ---
     @property
@@ -124,6 +146,10 @@ class ElementDescriptor:
             return f'{page}.locator({_q("#" + self.id)})'
         if self.nameAttr:
             return f'{page}.locator({_q(f"[name={self.nameAttr!r}]")})'
+        # Prefer the precise CSS path (matches the exact harvested element) over
+        # text/tag fallbacks, which can select a different node on replay.
+        if self.css:
+            return f'{page}.locator({_q(self.css)})'
         if self.text:
             return f'{page}.get_by_text({_q(self.text)}, exact=False).first'
         # last resort
@@ -234,6 +260,8 @@ def live_locator(page, el: "ElementDescriptor"):
         return page.locator(f"#{el.id}")
     if el.nameAttr:
         return page.locator(f"[name={el.nameAttr!r}]")
+    if el.css:
+        return page.locator(el.css)
     if el.text:
         return page.get_by_text(el.text, exact=False).first
     return page.locator(el.tag).first

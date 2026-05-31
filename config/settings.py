@@ -53,8 +53,11 @@ class Settings(BaseSettings):
     llm_temperature: float = 0.1
     llm_max_tokens: int = 4096
     agent_max_steps: int = 25
+    agent_repair: bool = True            # one validate+repair round on Skript_L
     crawler_max_states: int = 40
     crawler_max_depth: int = 4
+    crawler_max_actions_per_state: int = 12
+    crawler_max_scenarios: int = 12
 
     # --- execution ---
     headless: bool = True

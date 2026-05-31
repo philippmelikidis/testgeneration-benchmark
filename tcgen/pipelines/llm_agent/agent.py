@@ -15,10 +15,17 @@ from tcgen.progress import NullPhase, Phase
 from tcgen.pipelines.llm_agent.browser_tools import BrowserSession
 from tcgen.pipelines.llm_agent.prompts import (
     EXPLORE_SYSTEM,
+    REPAIR_SYSTEM,
     SYNTHESIS_SYSTEM,
+    repair_user_prompt,
     synthesis_user_prompt,
 )
-from tcgen.util import extract_code_block, extract_json_object, truncate
+from tcgen.util import (
+    extract_code_block,
+    extract_json_object,
+    truncate,
+    validate_playwright_code,
+)
 
 log = logging.getLogger(__name__)
 
@@ -54,6 +61,7 @@ class LLMAgent:
         phase.update(0.9, "Synthese der Testsuite aus Beobachtungen")
         transcript = self._build_transcript(action_log, pages)
         code = self._synthesize(transcript)
+        code = self._maybe_repair(code, phase)
         phase.update(1.0, f"Skript_L erzeugt ({len(code.splitlines())} Zeilen)")
         return GeneratedScript(
             pipeline=Pipeline.LLM_AGENT,
@@ -135,6 +143,30 @@ class LLMAgent:
         ]
         reply = self.provider.chat(messages)
         return extract_code_block(reply)
+
+    def _maybe_repair(self, code: str, phase: Phase) -> str:
+        """One validate+repair round so Skript_L is at least runnable Python."""
+        if not self.settings.agent_repair:
+            return code
+        issues = validate_playwright_code(code)
+        if not issues:
+            return code
+        phase.log("Validierung fand Probleme: " + "; ".join(issues) + " — Repair-Runde")
+        messages: list[Message] = [
+            {"role": "system", "content": REPAIR_SYSTEM},
+            {"role": "user", "content": repair_user_prompt(code, issues)},
+        ]
+        try:
+            repaired = extract_code_block(self.provider.chat(messages))
+        except Exception as exc:  # noqa: BLE001
+            phase.log(f"Repair fehlgeschlagen ({exc}) — behalte Originalskript")
+            return code
+        remaining = validate_playwright_code(repaired)
+        if remaining and len(remaining) >= len(issues):
+            phase.log("Repair brachte keine Verbesserung — behalte Originalskript")
+            return code
+        phase.log(f"Repair angewandt: {len(issues)} -> {len(remaining)} Probleme")
+        return repaired
 
 
 def generate(target: TargetApp, settings: Settings | None = None,

@@ -5,7 +5,35 @@ from tcgen.util import (
     extract_json_object,
     model_family,
     same_model_family,
+    validate_playwright_code,
 )
+
+
+def test_validate_playwright_code_accepts_clean_module():
+    good = (
+        "from playwright.sync_api import Page, expect\n\n"
+        "def test_a(page: Page):\n"
+        '    page.goto("http://x/")\n'
+        '    page.get_by_role("link", name="A").click()\n'
+        '    expect(page.locator("body")).to_be_visible()\n'
+    )
+    assert validate_playwright_code(good) == []
+
+
+def test_validate_playwright_code_flags_broken_module():
+    bad = (
+        "def test_a(page):\n"
+        '    page.click(get_by_role("button", name="x").first)\n'
+        "    page.click(e1)\n"
+    )
+    issues = validate_playwright_code(bad)
+    assert any("get_by" in i for i in issues)          # bare get_by_*
+    assert any("e1" in i for i in issues)              # leftover exploration ref
+    assert any("import" in i.lower() for i in issues)  # missing playwright import
+
+
+def test_validate_playwright_code_flags_syntax_error():
+    assert any("SyntaxError" in i for i in validate_playwright_code("def f(:\n  pass"))
 
 
 def test_model_family():

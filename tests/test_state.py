@@ -23,6 +23,20 @@ def test_testid_takes_precedence():
     assert el.locator_code() == 'page.get_by_test_id("submit-btn")'
 
 
+def test_css_fallback_for_unnamed_input():
+    # An input with no testid/name/id/placeholder/text must fall back to the
+    # precise CSS path, NOT locator("input").first (which can hit another node).
+    el = ElementDescriptor(tag="input", css="form > input:nth-of-type(2)")
+    assert el.locator_code() == 'page.locator("form > input:nth-of-type(2)")'
+
+
+def test_named_link_still_prefers_role_over_css():
+    # A link with visible text keeps the semantic role+name locator; css is only
+    # a fallback for elements without a usable name.
+    el = ElementDescriptor(tag="a", text="Search", href="/s", css="nav > a:nth-of-type(3)")
+    assert el.locator_code() == 'page.get_by_role("link", name="Search").first'
+
+
 def test_goto_action_code_lines():
     act = Action(kind="goto", url="http://localhost:8080/")
     assert act.code_lines() == [

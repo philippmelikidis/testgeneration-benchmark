@@ -44,9 +44,6 @@ _SAMPLE_VALUES = {
     "tel": "1234567890",
     "number": "1",
 }
-_MAX_ACTIONS_PER_STATE = 8
-
-
 @dataclass
 class CrawlOutput:
     """Result of a crawl: graph, selected scenarios, and statistics."""
@@ -127,7 +124,8 @@ class Crawler:
             ctx.close()
             browser.close()
 
-        scenarios = self._select_scenarios(states, paths, root_sig)
+        scenarios = self._select_scenarios(
+            states, paths, root_sig, max_scenarios=self.settings.crawler_max_scenarios)
         phase.update(1.0, f"Crawl fertig: {len(states)} Zustände, "
                           f"{graph.number_of_edges()} Übergänge, "
                           f"{len(scenarios)} Szenarien")
@@ -164,7 +162,7 @@ class Crawler:
                 continue
             seen.add(key)
             actions.append(act)
-            if len(actions) >= _MAX_ACTIONS_PER_STATE:
+            if len(actions) >= self.settings.crawler_max_actions_per_state:
                 break
         return actions
 

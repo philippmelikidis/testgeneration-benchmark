@@ -55,6 +55,31 @@ Hard requirements:
 """
 
 
+REPAIR_SYSTEM = """\
+You are fixing a pytest-playwright test module that has defects. Return the
+FULL corrected module, keeping the same intent and test functions. Fixing rules:
+- Every Playwright call must be on a `page` or a locator (e.g. `page.get_by_role(...)`,
+  `locator.click()`); never a bare `get_by_*(...)` and never `page.click(<locator>)`.
+- Remove any reference to undefined names such as exploration refs (e1, e2, ...).
+- Ensure `from playwright.sync_api import Page, expect` is present and every test
+  takes `(page: Page)` and starts with `page.goto(...)`.
+- Output ONLY the corrected Python code in a single ```python fenced block.
+"""
+
+
+def repair_user_prompt(code: str, issues: list[str]) -> str:
+    bullets = "\n".join(f"- {i}" for i in issues)
+    return f"""\
+The following test module has these problems:
+{bullets}
+
+Fix them and return the complete corrected module:
+```python
+{code}
+```
+"""
+
+
 def synthesis_user_prompt(base_url: str, transcript: str) -> str:
     return f"""\
 BASE URL: {base_url}

@@ -1,20 +1,30 @@
 # Web-UI Testfallgenerierung — LLM vs. traditionell
 
 Empirische Werkbank zum Methodenentwurf (Fricke / Melikidis, HS Reutlingen).
-Drei Generierungs-Pipelines auf denselben User-Stories und Ziel-Anwendungen,
-bewertet durch eine gemeinsame Metrik-Suite und auf ISO/IEC 25010 *Functional
-Suitability* abgebildet.
+Drei Generierungs-Pipelines auf denselben Ziel-Anwendungen, bewertet durch eine
+gemeinsame Metrik-Suite und auf ISO/IEC 25010 *Functional Suitability* abgebildet.
+User-Stories steuern Methode 2 und dienen als gemeinsamer Bewertungsmaßstab
+(siehe unten).
 
 | Pipeline | Artefakt | Methode | Kurz |
 |----------|----------|---------|------|
-| Crawler   | `Skript_C` | 1 (traditionell) | autonomer Playwright-Crawler, Zustandsgraph → pytest-Skript |
-| LLM-Agent | `Skript_L` | 1 (LLM-only)     | gleiche Aufgabe wie der Crawler (App autonom erkunden, Testsuite erzeugen); User-Stories als Kontext |
-| Hybrid    | `Skript_H` | 2 (Aufsatz)      | LLM verfeinert `Skript_C` (Locator, Assertions, Lesbarkeit), optional mit Fachkontext |
+| Crawler   | `Skript_C` | 1 (traditionell) | autonomer Playwright-Crawler, Zustandsgraph → pytest-Skript; **ohne** User-Story |
+| LLM-Agent | `Skript_L` | 1 (LLM-only)     | gleiche Aufgabe wie der Crawler (App autonom erkunden, Testsuite erzeugen); **ohne** User-Story |
+| Hybrid    | `Skript_H` | 2 (Aufsatz)      | LLM verfeinert `Skript_C` **mit** User-Story (+ optionalem Fachkontext): Locator, Assertions, Lesbarkeit |
 
-**Methode 1 — fairer A/B:** Crawler und LLM-Agent bekommen dasselbe
-Aufgabengebiet (autonom erkunden und eine Testsuite erzeugen). Der Agent erhält
-die User-Stories als zusätzlichen Kontext zur Priorisierung, nicht als alleinigen
-Auftrag — so bleibt der Vergleich auf gleicher Aufgabe.
+**Methode 1 — fairer A/B ohne Anforderungen:** Crawler und LLM-Agent bekommen
+das exakt gleiche, anforderungsfreie Aufgabengebiet (App autonom erkunden und
+eine Testsuite erzeugen) — **keiner** von beiden sieht die User-Stories. So misst
+der Vergleich rein die Generierungsmethode auf identischer Aufgabe.
+
+**Methode 2 — Anforderungswissen kommt hier rein:** Erst der Hybrid-Refiner
+erhält die User-Stories (und optional fachlichen Zusatzkontext) und verbessert
+damit `Skript_C`. Hypothese: `Skript_H` schlägt `Skript_C` und `Skript_L`.
+
+> Bewertung: Die gemeinsame Metrik-Suite (inkl. DeepEval-Judge) nutzt die
+> User-Stories als **einheitlichen Maßstab für alle drei** Artefakte — auch für
+> die story-frei generierten `Skript_C`/`Skript_L`. Das macht die Hybrid-Hypothese
+> messbar (hilft injiziertes Anforderungswissen?).
 
 Methode 1 (Crawler + LLM-Agent) ist der lauffähige Kern. Methode 2 (Hybrid)
 ist sauber abgegrenzt und wird pro Lauf zugeschaltet, ohne die Baseline zu
@@ -143,6 +153,21 @@ Evaluationsumgebung, nicht des Artefakts:
 
 SPA-Wartezeiten sind über `TCGEN_SETTLE_TIMEOUT_MS` / `TCGEN_SETTLE_PAUSE_MS`
 einstellbar (networkidle gedeckelt, da SPAs wie Juice Shop im Hintergrund pollen).
+
+### Skript-Qualität (methodisch sauber, kein Ergebnis-Schönen)
+
+- **Crawler:** der Serializer nutzt präzise CSS/nth-Selektoren des tatsächlich
+  erkundeten Elements (statt `locator(tag).first`), damit `Skript_C` exakt die
+  Elemente trifft, die der Crawler angefasst hat.
+- **LLM-Agent:** nach der Synthese eine Validierungs-Runde (`compile` + Lint auf
+  fehlende `page.`-Präfixe, Explorations-Reste wie `e1`, fehlender Import); bei
+  Befund eine einzige Reparatur-Runde (`TCGEN_AGENT_REPAIR`). Macht `Skript_L`
+  lauffähig, ohne den Inhalt vorzugeben.
+- **Hybrid-Refiner:** muss Navigation/Locator aus `Skript_C` wiederverwenden und
+  darf keine App-Selektoren erfinden, die nicht im Eingabeskript vorkommen
+  (gegen halluzinierte `.product-card`-artige Selektoren).
+- **Komplexität:** `TCGEN_CRAWLER_MAX_ACTIONS_PER_STATE` und
+  `TCGEN_CRAWLER_MAX_SCENARIOS` steuern Breite/Anzahl der Szenarien.
 
 ### Headless / programmatisch
 

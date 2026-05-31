@@ -45,6 +45,31 @@ def truncate(s: str, limit: int = 2000) -> str:
     return s if len(s) <= limit else s[:limit] + "\n…[truncated]"
 
 
+_BARE_GETBY_RE = re.compile(r"(?<![\.\w])get_by_\w+\s*\(")
+_LEFTOVER_REF_RE = re.compile(r"\(\s*[a-z]\d+\s*\)")  # e.g. click(e1) — exploration ref
+
+
+def validate_playwright_code(code: str) -> list[str]:
+    """Return a list of problems that would make a pytest-playwright module fail.
+
+    High-precision checks only (so we don't trigger needless repair rounds):
+    syntax errors, ``get_by_*`` used without a ``page``/locator prefix, leftover
+    exploration refs like ``click(e1)``, and a missing Playwright import.
+    """
+    issues: list[str] = []
+    try:
+        compile(code, "<skript_l>", "exec")
+    except SyntaxError as exc:
+        issues.append(f"SyntaxError: {exc.msg} (Zeile {exc.lineno})")
+    if _BARE_GETBY_RE.search(code):
+        issues.append("get_by_*() ohne page/locator-Präfix (z. B. page.get_by_role(...)).")
+    if _LEFTOVER_REF_RE.search(code):
+        issues.append("verweist auf undefinierte Explorations-Refs wie e1 (z. B. click(e1)).")
+    if "from playwright.sync_api import" not in code:
+        issues.append("fehlender Import: from playwright.sync_api import Page, expect")
+    return issues
+
+
 def model_family(model: str) -> str:
     """Leading alphabetic family of a model id, e.g. 'qwen2.5-coder' -> 'qwen'."""
     m = re.match(r"[a-zA-Z]+", model.strip())
