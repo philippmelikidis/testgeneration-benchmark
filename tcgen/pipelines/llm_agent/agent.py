@@ -30,6 +30,17 @@ from tcgen.util import (
 log = logging.getLogger(__name__)
 
 
+def _as_str(value) -> str:
+    """Coerce an arbitrary JSON value to a stripped string.
+
+    Returns '' for None and for nested dicts/lists, so a malformed model reply
+    (e.g. ``{"action": {...}}``) can never crash the exploration loop.
+    """
+    if value is None or isinstance(value, (dict, list)):
+        return ""
+    return str(value).strip()
+
+
 def _story_block(stories: list[UserStory]) -> str:
     out = []
     for s in stories:
@@ -100,31 +111,35 @@ class LLMAgent:
                 {"role": "user", "content": user},
             ]
             reply = self.provider.chat(messages, json_mode=True)
-            action = extract_json_object(reply)
-            kind = (action.get("action") or "").strip().lower()
-            log.debug("agent step %d: %s", step, action)
-            phase.log(f"  Aktion: {kind} {action.get('ref', '')}{action.get('url', '')}"
-                      f"{(' = ' + action.get('value', '')) if kind == 'fill' else ''}".rstrip())
+            # Defensive parsing: small local models sometimes return non-objects
+            # or nest values, so coerce every field to a plain string.
+            raw = extract_json_object(reply)
+            if not isinstance(raw, dict):
+                raw = {}
+            kind = _as_str(raw.get("action")).lower()
+            ref, url, value = _as_str(raw.get("ref")), _as_str(raw.get("url")), _as_str(raw.get("value"))
+            log.debug("agent step %d: %s", step, raw)
+            phase.log(f"  Aktion: {kind} {ref}{url}{(' = ' + value) if kind == 'fill' else ''}".rstrip())
 
             if not kind or kind == "finish":
                 action_log.append(f"{step}: finish")
                 break
             try:
-                observation = self._dispatch(session, kind, action)
-                action_log.append(f"{step}: {kind} {action.get('ref','')}{action.get('url','')}"
-                                   f"{(' = ' + action.get('value','')) if kind=='fill' else ''}")
+                observation = self._dispatch(session, kind, ref, url, value)
+                action_log.append(f"{step}: {kind} {ref}{url}"
+                                   f"{(' = ' + value) if kind == 'fill' else ''}")
             except Exception as exc:  # noqa: BLE001
                 observation = f"ERROR executing {kind}: {exc}\n\n{session.observe()}"
                 action_log.append(f"{step}: {kind} -> ERROR: {exc}")
         return action_log, pages
 
-    def _dispatch(self, session: BrowserSession, kind: str, action: dict) -> str:
+    def _dispatch(self, session: BrowserSession, kind: str, ref: str, url: str, value: str) -> str:
         if kind == "navigate":
-            return session.navigate(action.get("url", "/"))
+            return session.navigate(url or "/")
         if kind == "click":
-            return session.click(action["ref"])
+            return session.click(ref)
         if kind == "fill":
-            return session.fill(action["ref"], action.get("value", ""))
+            return session.fill(ref, value)
         if kind == "get_text":
             return "PAGE TEXT:\n" + session.get_text() + "\n\n" + session.observe()
         raise ValueError(f"Unknown action {kind!r}")
