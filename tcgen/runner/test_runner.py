@@ -28,7 +28,13 @@ import re
 import pytest
 
 
-def _dismiss_overlays(page) -> None:
+def _register_overlay_handlers(page):
+    """Auto-dismiss welcome/cookie overlays whenever they would block an action.
+
+    Uses Playwright's add_locator_handler: the engine itself invokes the handler
+    when one of these overlays intercepts an action, then retries the action.
+    Robust (no monkeypatching) and applied identically to every pipeline.
+    """
     candidates = []
     try:
         candidates.append(page.get_by_label("Close Welcome Banner"))
@@ -46,32 +52,15 @@ def _dismiss_overlays(page) -> None:
         pass
     for _loc in candidates:
         try:
-            _t = _loc.first
-            if _t.count() > 0 and _t.is_visible():
-                _t.click(timeout=1200)
-                page.wait_for_timeout(200)
+            page.add_locator_handler(_loc, lambda *a, loc=_loc: loc.first.click(timeout=1500))
         except Exception:
-            continue
+            pass
 
 
 @pytest.fixture(autouse=True)
 def _harness(page):
     page.set_default_timeout({timeout})
-    _orig_goto = page.goto
-
-    def _goto(url, **kwargs):
-        result = _orig_goto(url, **kwargs)
-        try:
-            page.wait_for_load_state("domcontentloaded")
-        except Exception:
-            pass
-        _dismiss_overlays(page)
-        return result
-
-    try:
-        page.goto = _goto  # best-effort; if the Page forbids it, run unpatched
-    except Exception:
-        pass
+    _register_overlay_handlers(page)
     yield
 '''
 
@@ -116,6 +105,7 @@ class TestRunner:
             element_coverage=objective.element_coverage(script.code),
             exercised_coverage=objective.exercised_locator_count(script.code, passed_fns),
             flakiness=self._flakiness(runs),
+            first_error=first.get("first_error"),
             stdout=first["stdout"][-4000:],
             stderr=first["stderr"][-4000:],
         )
@@ -154,6 +144,7 @@ class TestRunner:
         except subprocess.TimeoutExpired as exc:
             return {"executed": False, "n_tests": 0, "n_passed": 0, "n_failed": 0,
                     "duration": float(self.run_timeout_s), "outcomes": {},
+                    "first_error": "TIMEOUT: Gesamtlauf überschritt run_timeout_s",
                     "stdout": exc.stdout or "", "stderr": "TIMEOUT"}
 
         parsed = self._parse_report(report)
@@ -172,7 +163,7 @@ class TestRunner:
     @staticmethod
     def _parse_report(report: Path) -> dict:
         base = {"executed": False, "n_tests": 0, "n_passed": 0, "n_failed": 0,
-                "duration": 0.0, "outcomes": {}}
+                "duration": 0.0, "outcomes": {}, "first_error": None}
         if not report.exists():
             return base
         try:
@@ -189,6 +180,7 @@ class TestRunner:
             "n_failed": summary.get("failed", 0) + summary.get("error", 0),
             "duration": data.get("duration", 0.0),
             "outcomes": outcomes,
+            "first_error": _first_failure_message(tests),
         }
 
     @staticmethod
@@ -204,3 +196,18 @@ class TestRunner:
             return 0.0
         unstable = sum(1 for outcomes in per_test.values() if len(outcomes) > 1)
         return round(unstable / len(per_test), 4)
+
+
+def _first_failure_message(tests: list[dict]) -> str | None:
+    """Return a short message for the first failing/erroring test in the report."""
+    for t in tests:
+        if t.get("outcome") not in ("failed", "error"):
+            continue
+        for phase in ("call", "setup", "teardown"):
+            info = t.get(phase) or {}
+            crash = info.get("crash") or {}
+            msg = crash.get("message") or info.get("longrepr")
+            if msg:
+                node = t.get("nodeid", "").split("::")[-1]
+                return f"{node}: {str(msg).strip().splitlines()[-1][:400]}"
+    return None

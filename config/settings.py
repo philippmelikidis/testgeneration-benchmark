@@ -66,9 +66,10 @@ class Settings(BaseSettings):
     # background and never truly idles, so keep this small) + a short paint pause.
     settle_timeout_ms: int = 1500
     settle_pause_ms: int = 400
-    # Per-action timeout the generated test harness applies (fail-fast on broken
-    # scripts instead of the 30s Playwright default).
-    test_action_timeout_ms: int = 8000
+    # Per-action timeout the generated test harness applies. High enough that
+    # slow SPA renders/animations don't time out spuriously, but below the 30s
+    # Playwright default so genuinely broken scripts still fail in reasonable time.
+    test_action_timeout_ms: int = 15000
 
     @property
     def generation_model(self) -> str:

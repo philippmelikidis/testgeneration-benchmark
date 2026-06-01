@@ -114,6 +114,8 @@ for result, row in zip(results, rows):
         meta = result.script.meta
         st.write(f"Generierungszeit: {ui.fmt(result.script.generation_time_s)} s · "
                  f"Modell: `{result.script.model}` · Provider: `{result.script.provider}`")
+        if result.execution.first_error:
+            st.error(f"Erster Test-Fehler: {result.execution.first_error}", icon=None)
         if meta:
             st.json(meta, expanded=False)
         if result.judge.reasons:

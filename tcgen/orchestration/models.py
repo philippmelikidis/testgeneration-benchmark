@@ -66,6 +66,9 @@ class ExecutionResult(BaseModel):
     exercised_coverage: int = 0
     # Flakiness: 0.0 = perfectly stable across repeated runs, 1.0 = fully unstable.
     flakiness: float = 0.0
+    # Message of the first failing/erroring test (from the pytest report) so the
+    # real cause is visible without digging through stdout.
+    first_error: str | None = None
     stdout: str = ""
     stderr: str = ""
 
