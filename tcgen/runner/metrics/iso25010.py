@@ -19,12 +19,13 @@ Design notes (addressing known metric pitfalls):
   binary 0/1 flag — a suite where 9/10 tests pass scores above one where 1/10
   passes.
 
-Interpretation caveat (Methode 1): the DeepEval judge scores all artefacts
-against the user stories as a *common yardstick*, even though the crawler and the
-LLM agent never received those stories during generation. Judge-based numbers for
-``Skript_C``/``Skript_L`` therefore measure "did the requirement-free suite
-happen to cover the requirements", which is exactly the contrast against the
-story-aware hybrid ``Skript_H``. Report and discuss it as such.
+Judge inputs are decoupled by method: ``Skript_C``/``Skript_L`` (Methode 1) are
+graded *intrinsically* (test quality + grounding to the app), because they were
+generated without the user stories; ``Skript_H`` (Methode 2) is graded against
+the user stories it was given. This avoids branding real, explored elements as
+"hallucinated" just because they are absent from a requirement the pipeline never
+saw. Consequence: judge-derived numbers are fair per method but only partially
+comparable across Methode 1 vs. Methode 2 — report them as such.
 """
 
 from __future__ import annotations

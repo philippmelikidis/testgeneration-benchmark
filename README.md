@@ -206,13 +206,21 @@ Hallucination, Readability — je [0, 1].
   Experiment einheitlich für alle Pipelines).
 - Functional Appropriateness ← mean(Judge-Appropriateness, 1 − Hallucination).
 
-**Interpretation (wichtig):** Der Judge bewertet *alle* drei Artefakte gegen die
-User-Stories als gemeinsamen Maßstab — auch `Skript_C`/`Skript_L`, die die Stories
-bei der Generierung nie gesehen haben. Judge-/Correctness-Zahlen für Methode 1
-messen also „hat die anforderungsfreie Suite die Anforderungen *zufällig*
-abgedeckt" — der Kontrast zum story-bewussten `Skript_H` ist genau der Punkt.
-Beim Reporten so benennen. Der Completeness-Nenner ist als Threat-to-Validity zu
-führen (Crawler-Sichtbarkeit begrenzt die „entdeckte" Oberfläche).
+**Interpretation (wichtig) — entkoppelte Judge-Bewertung:** Der Judge bewertet
+jede Pipeline mit dem zu ihrer Aufgabe passenden Maßstab:
+- `Skript_C` / `Skript_L` (Methode 1, ohne Stories generiert) werden
+  **intrinsisch** bewertet: kohärente Aktionen/Assertions, robuste Locator,
+  Lesbarkeit; Hallucination = Bezug auf Elemente, die für die App *unplausibel*
+  sind — **nicht** „nicht in den Stories".
+- `Skript_H` (Methode 2) wird **gegen die User-Stories** bewertet
+  (Akzeptanzkriterien-Abdeckung).
+
+Dadurch wird ein echter Crawler nicht mehr fälschlich als „100% Hallucination"
+gewertet, nur weil er reale, aber nicht-in-Stories-stehende Elemente testet.
+Folge: Judge-Zahlen sind je Methode fair, aber zwischen Methode 1 und 2 nur
+eingeschränkt direkt vergleichbar — beim Reporten so benennen. Der
+Completeness-Nenner bleibt ein Threat-to-Validity (Crawler-Sichtbarkeit begrenzt
+die „entdeckte" Oberfläche).
 
 ## Tests
 

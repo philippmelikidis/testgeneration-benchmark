@@ -34,25 +34,19 @@ def _register_overlay_handlers(page):
     Uses Playwright's add_locator_handler: the engine itself invokes the handler
     when one of these overlays intercepts an action, then retries the action.
     Robust (no monkeypatching) and applied identically to every pipeline.
+
+    Only PRECISE, STRING-based locators are used here. Regex names (e.g. with a
+    \\b word boundary) are NOT valid in Playwright's selector engine and raise
+    InvalidSelectorError on every action, so they are deliberately avoided.
     """
-    candidates = []
-    try:
-        candidates.append(page.get_by_label("Close Welcome Banner"))
-    except Exception:
-        pass
-    for _name in ("Me want it!", "Dismiss"):
-        try:
-            candidates.append(page.get_by_text(_name, exact=False))
-        except Exception:
-            pass
-    try:
-        candidates.append(page.get_by_role(
-            "button", name=re.compile(r"(?i)\\b(dismiss|got it|accept|agree|close|ok)\\b")))
-    except Exception:
-        pass
+    candidates = [
+        page.get_by_role("button", name="dismiss cookie message"),  # cookie: "Me want it!"
+        page.get_by_role("button", name="Dismiss"),                 # welcome banner
+        page.get_by_label("Close Welcome Banner"),                  # welcome (X)
+    ]
     for _loc in candidates:
         try:
-            page.add_locator_handler(_loc, lambda *a, loc=_loc: loc.first.click(timeout=1500))
+            page.add_locator_handler(_loc, lambda *a, loc=_loc: loc.first.click(timeout=2000))
         except Exception:
             pass
 

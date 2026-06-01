@@ -143,9 +143,15 @@ class ExperimentRunner:
         judge_phase = progress.phase(_W_JUDGE, f"{label}: Bewertung")
         try:
             judge = DeepEvalJudge(self.settings)
+            # Methode 2 (Skript_H) is graded against the user stories it was given;
+            # Methode 1 (Skript_C/L) is graded intrinsically (it never saw them).
+            story_block = (
+                _story_block(target.user_stories)
+                if result.script.pipeline is Pipeline.HYBRID else None
+            )
             result.judge = judge.judge(
-                result.script.code, _story_block(target.user_stories),
-                target.base_url, phase=judge_phase)
+                result.script.code, target.base_url,
+                story_block=story_block, phase=judge_phase)
         except Exception as exc:  # noqa: BLE001
             result.judge = JudgeScores()
             result.error = (result.error or "") + f" | judge failed: {exc}"
