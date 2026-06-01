@@ -1,6 +1,6 @@
 from tcgen.orchestration.models import ExecutionResult, JudgeScores
 from tcgen.runner.metrics import objective
-from tcgen.runner.metrics.iso25010 import COVERAGE_REFERENCE, map_to_iso
+from tcgen.runner.metrics.iso25010 import map_to_iso
 
 SAMPLE = '''
 from playwright.sync_api import Page, expect
@@ -16,15 +16,21 @@ def test_b(page: Page):
 '''
 
 
-def test_distinct_locators_and_coverage():
-    locs = objective.distinct_locators(SAMPLE)
-    # three distinct locator expressions
-    assert objective.element_coverage(SAMPLE) == len(locs) == 3
+def test_static_element_coverage_counts_all_locators():
+    assert objective.element_coverage(SAMPLE) == 3
 
 
-def test_assertion_and_testfn_counts():
-    assert objective.assertion_count(SAMPLE) == 2
-    assert objective.test_function_names(SAMPLE) == ["test_a", "test_b"]
+def test_locators_by_function_splits_per_test():
+    by_fn = objective.locators_by_function(SAMPLE)
+    assert set(by_fn) == {"test_a", "test_b"}
+    assert len(by_fn["test_a"]) == 1
+    assert len(by_fn["test_b"]) == 2
+
+
+def test_exercised_coverage_only_counts_passing_tests():
+    assert objective.exercised_locator_count(SAMPLE, {"test_a", "test_b"}) == 3
+    assert objective.exercised_locator_count(SAMPLE, {"test_a"}) == 1
+    assert objective.exercised_locator_count(SAMPLE, set()) == 0  # nothing passed
 
 
 def test_ssr():
@@ -33,20 +39,22 @@ def test_ssr():
     assert objective.successful_steps_ratio(0, 0) == 0.0
 
 
-def test_iso_mapping_combines_objective_and_judge():
-    ex = ExecutionResult(executed=True, ssr=1.0, element_coverage=10)
+def test_iso_uses_continuous_passrate_and_real_denominator():
+    ex = ExecutionResult(executed=True, ssr=0.9, exercised_coverage=10)
     jd = JudgeScores(correctness=0.8, appropriateness=0.6, hallucination=0.2)
-    iso = map_to_iso(ex, jd)
-    assert iso.functional_correctness == 0.9          # mean(0.8, 1.0)
-    norm_cov = min(10 / COVERAGE_REFERENCE, 1.0)       # 0.5
-    assert iso.functional_completeness == round((norm_cov + 1.0) / 2, 4)
-    assert iso.functional_appropriateness == 0.7       # mean(0.6, 1-0.2)
-    assert iso.overall is not None
+    iso = map_to_iso(ex, jd, coverage_denominator=20)
+    assert iso.functional_correctness == 0.85          # mean(0.8, 0.9) — continuous
+    assert iso.functional_completeness == 0.5           # 10 / 20 (real denominator)
+    assert iso.functional_appropriateness == 0.7        # mean(0.6, 1-0.2)
 
 
-def test_iso_mapping_handles_missing_judge():
-    ex = ExecutionResult(executed=False, ssr=0.0, element_coverage=0)
-    iso = map_to_iso(ex, JudgeScores())
-    # correctness falls back to ssr(=0 because not executed)
-    assert iso.functional_correctness == 0.0
-    assert iso.functional_appropriateness is None
+def test_iso_completeness_zero_when_nothing_exercised():
+    ex = ExecutionResult(executed=True, ssr=0.0, exercised_coverage=0)
+    iso = map_to_iso(ex, JudgeScores(correctness=0.5), coverage_denominator=20)
+    assert iso.functional_completeness == 0.0
+
+
+def test_iso_completeness_none_without_denominator():
+    ex = ExecutionResult(executed=True, ssr=1.0, exercised_coverage=5)
+    iso = map_to_iso(ex, JudgeScores(), coverage_denominator=None)
+    assert iso.functional_completeness is None

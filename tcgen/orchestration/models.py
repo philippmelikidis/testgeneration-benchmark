@@ -58,8 +58,12 @@ class ExecutionResult(BaseModel):
     duration_s: float = 0.0
     # Successful-Steps-Ratio: fraction of test steps that executed without error.
     ssr: float = 0.0
-    # Distinct DOM elements interacted with (proxy for element coverage).
+    # Static locator count over the whole script (reference; inflated by
+    # hallucinated locators).
     element_coverage: int = 0
+    # Distinct locators in tests that actually PASSED (execution-gated coverage;
+    # feeds ISO completeness).
+    exercised_coverage: int = 0
     # Flakiness: 0.0 = perfectly stable across repeated runs, 1.0 = fully unstable.
     flakiness: float = 0.0
     stdout: str = ""

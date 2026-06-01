@@ -85,6 +85,7 @@ def generate(target: TargetApp, settings: Settings | None = None,
             "n_edges": crawl.n_edges,
             "n_scenarios": len(crawl.scenarios),
             "element_coverage": _element_coverage(crawl),
+            "discovered_elements": crawl.discovered_elements,
             "crawl_time_s": crawl.elapsed_s,
         },
     )

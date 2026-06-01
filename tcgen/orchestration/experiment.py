@@ -94,6 +94,9 @@ class ExperimentRunner:
                 self._evaluate_into(result, target, progress)
             record.pipelines.append(result)
 
+        if self.evaluate:
+            self._finalize_iso(record, scripts)
+
         path = self.store.save(record)
         progress.finish(f"gespeichert: {path.name}")
         return record
@@ -149,7 +152,25 @@ class ExperimentRunner:
             judge_phase.log(f"FEHLER Judge {label}: {exc}")
             log.exception("Judge failed for %s", label)
 
-        result.iso = map_to_iso(result.execution, result.judge)
+    def _finalize_iso(self, record: ExperimentRecord,
+                      scripts: dict[Pipeline, GeneratedScript]) -> None:
+        """Compute ISO with a single, shared completeness denominator.
+
+        Denominator = interactable elements the crawler discovered on the app.
+        Without a crawler in the run, fall back to the max exercised coverage
+        observed across pipelines (relative), else leave completeness undefined.
+        """
+        denom: int | None = None
+        crawler_script = scripts.get(Pipeline.CRAWLER)
+        if crawler_script is not None:
+            denom = crawler_script.meta.get("discovered_elements") or None
+        if not denom:
+            exercised = [r.execution.exercised_coverage for r in record.pipelines]
+            denom = max(exercised) if exercised and max(exercised) > 0 else None
+
+        for result in record.pipelines:
+            result.iso = map_to_iso(result.execution, result.judge, denom)
+        record.notes = (record.notes + f" coverage_denominator={denom}").strip()
 
     @staticmethod
     def _new_id(app_key: str) -> str:

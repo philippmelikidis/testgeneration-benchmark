@@ -1,23 +1,35 @@
 """Map the raw metric suite onto ISO/IEC 25010 Functional Suitability.
 
 Following the SLR's synthesis mapping (Planning §9):
-  * functional correctness / mutation-like signals -> Functional Correctness
-  * coverage / executability                       -> Functional Completeness
-  * requirement/scenario appropriateness           -> Functional Appropriateness
+  * functional correctness / pass behaviour   -> Functional Correctness
+  * coverage of the reachable surface          -> Functional Completeness
+  * requirement/scenario appropriateness       -> Functional Appropriateness
 
-The standard is used purely as a *framing*, exactly as in the SLR. Each
-sub-characteristic is reported in [0, 1] and combines an objective signal
-(execution) with a semantic signal (judge) where both are available.
+Each sub-characteristic is in [0, 1] and combines an objective signal with a
+semantic signal where both are available.
+
+Design notes (addressing known metric pitfalls):
+- **Completeness uses *exercised* coverage** (distinct locators in PASSING tests),
+  not the static locator count, so hallucinated locators in failing tests do not
+  inflate it.
+- The completeness denominator is the **number of interactable elements the
+  crawler actually discovered on the app** (passed in by the orchestrator), not a
+  magic constant.
+- **Executability is continuous** (the pass rate / SSR feeds correctness), not a
+  binary 0/1 flag — a suite where 9/10 tests pass scores above one where 1/10
+  passes.
+
+Interpretation caveat (Methode 1): the DeepEval judge scores all artefacts
+against the user stories as a *common yardstick*, even though the crawler and the
+LLM agent never received those stories during generation. Judge-based numbers for
+``Skript_C``/``Skript_L`` therefore measure "did the requirement-free suite
+happen to cover the requirements", which is exactly the contrast against the
+story-aware hybrid ``Skript_H``. Report and discuss it as such.
 """
 
 from __future__ import annotations
 
 from tcgen.orchestration.models import ExecutionResult, Iso25010, JudgeScores
-
-# Element-coverage is unbounded; normalise against a soft reference cap so it can
-# enter a [0, 1] sub-characteristic. Tune per study; documented as a threat to
-# validity rather than an absolute scale.
-COVERAGE_REFERENCE = 20
 
 
 def _mean(*vals: float | None) -> float | None:
@@ -25,17 +37,21 @@ def _mean(*vals: float | None) -> float | None:
     return round(sum(present) / len(present), 4) if present else None
 
 
-def map_to_iso(execution: ExecutionResult, judge: JudgeScores) -> Iso25010:
-    # --- Functional Correctness: do assertions hold + does the judge agree? ---
-    correctness = _mean(
-        judge.correctness,
-        execution.ssr if execution.executed else 0.0,
-    )
+def map_to_iso(
+    execution: ExecutionResult,
+    judge: JudgeScores,
+    coverage_denominator: int | None = None,
+) -> Iso25010:
+    # --- Functional Correctness: assertions hold (continuous pass rate) + judge ---
+    correctness = _mean(judge.correctness, execution.ssr)
 
-    # --- Functional Completeness: breadth of interaction + executability ---
-    norm_cov = min(execution.element_coverage / COVERAGE_REFERENCE, 1.0)
-    executability = 1.0 if execution.executed else 0.0
-    completeness = _mean(norm_cov, executability)
+    # --- Functional Completeness: exercised share of the reachable surface ---
+    if coverage_denominator and coverage_denominator > 0:
+        completeness: float | None = round(
+            min(execution.exercised_coverage / coverage_denominator, 1.0), 4
+        )
+    else:
+        completeness = None
 
     # --- Functional Appropriateness: on-task + grounded (low hallucination) ---
     grounded = None if judge.hallucination is None else (1.0 - judge.hallucination)

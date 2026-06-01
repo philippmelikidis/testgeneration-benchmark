@@ -98,6 +98,13 @@ class TestRunner:
         n_passed = first["n_passed"]
         n_failed = first["n_failed"]
 
+        # Which test functions passed -> execution-gated ("exercised") coverage.
+        passed_fns = {
+            nodeid.split("::")[-1]
+            for nodeid, outcome in first.get("outcomes", {}).items()
+            if outcome == "passed"
+        }
+
         return ExecutionResult(
             executed=first["executed"],
             passed=(n_tests > 0 and n_failed == 0 and first["executed"]),
@@ -107,6 +114,7 @@ class TestRunner:
             duration_s=round(first["duration"], 2),
             ssr=objective.successful_steps_ratio(n_passed, n_tests),
             element_coverage=objective.element_coverage(script.code),
+            exercised_coverage=objective.exercised_locator_count(script.code, passed_fns),
             flakiness=self._flakiness(runs),
             stdout=first["stdout"][-4000:],
             stderr=first["stderr"][-4000:],

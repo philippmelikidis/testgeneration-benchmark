@@ -54,6 +54,9 @@ class CrawlOutput:
     n_states: int = 0
     n_edges: int = 0
     elapsed_s: float = 0.0
+    # Distinct interactable elements found across ALL crawled states — the
+    # "reachable surface" used as the denominator for completeness.
+    discovered_elements: int = 0
 
 
 class Crawler:
@@ -126,9 +129,10 @@ class Crawler:
 
         scenarios = self._select_scenarios(
             states, paths, root_sig, max_scenarios=self.settings.crawler_max_scenarios)
+        discovered = len({e.signature() for st in states.values() for e in st.elements})
         phase.update(1.0, f"Crawl fertig: {len(states)} Zustände, "
                           f"{graph.number_of_edges()} Übergänge, "
-                          f"{len(scenarios)} Szenarien")
+                          f"{len(scenarios)} Szenarien, {discovered} Elemente")
         return CrawlOutput(
             app_key=self.target.key,
             scenarios=scenarios,
@@ -136,6 +140,7 @@ class Crawler:
             n_states=len(states),
             n_edges=graph.number_of_edges(),
             elapsed_s=round(time.time() - t0, 2),
+            discovered_elements=discovered,
         )
 
     # ------------------------------------------------------------------ #

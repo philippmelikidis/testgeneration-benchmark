@@ -186,21 +186,33 @@ print(rec.id)
 
 ## Metriken
 
-**Objektiv (ohne LLM):** Ausführbarkeit, SSR (Successful-Steps-Ratio),
-Element-Coverage (distinkte Locator), Flakiness (Outcome-Stabilität über
-`flakiness_runs` Wiederholungen), Generierungs- und Laufzeit.
+**Objektiv (ohne LLM):**
+- **SSR / Pass-Rate** — bestandene Tests ÷ Tests (kontinuierlich).
+- **Element-Coverage (genutzt)** — distinkte Locator aus *bestandenen* Tests.
+  Execution-gated, damit halluzinierte Locator (in fehlschlagenden Tests) den
+  Wert nicht aufblähen. Die statische Variante (alle Code-Locator) wird nur als
+  Referenz mitgeführt.
+- **Flakiness** — Outcome-Stabilität über `flakiness_runs` Wiederholungen.
+- Generierungs- und Laufzeit.
 
 **Semantisch (DeepEval G-Eval, LLM-as-Judge):** Correctness, Appropriateness,
 Hallucination, Readability — je [0, 1].
 
 **ISO/IEC 25010 Functional Suitability** (Mapping gemäß SLR §9):
-- Functional Correctness ← Judge-Correctness + SSR
-- Functional Completeness ← normalisierte Element-Coverage + Ausführbarkeit
-- Functional Appropriateness ← Judge-Appropriateness + (1 − Hallucination)
+- Functional Correctness ← mean(Judge-Correctness, Pass-Rate) — Pass-Rate
+  **kontinuierlich**, kein binäres „ausführbar".
+- Functional Completeness ← genutzte Element-Coverage ÷ **vom Crawler entdeckte
+  Elementanzahl** (echter, app-spezifischer Nenner statt Magic-Konstante; pro
+  Experiment einheitlich für alle Pipelines).
+- Functional Appropriateness ← mean(Judge-Appropriateness, 1 − Hallucination).
 
-Der `COVERAGE_REFERENCE`-Wert (Normierung der Element-Coverage) ist in
-`tcgen/runner/metrics/iso25010.py` dokumentiert und als Threat-to-Validity zu
-führen.
+**Interpretation (wichtig):** Der Judge bewertet *alle* drei Artefakte gegen die
+User-Stories als gemeinsamen Maßstab — auch `Skript_C`/`Skript_L`, die die Stories
+bei der Generierung nie gesehen haben. Judge-/Correctness-Zahlen für Methode 1
+messen also „hat die anforderungsfreie Suite die Anforderungen *zufällig*
+abgedeckt" — der Kontrast zum story-bewussten `Skript_H` ist genau der Punkt.
+Beim Reporten so benennen. Der Completeness-Nenner ist als Threat-to-Validity zu
+führen (Crawler-Sichtbarkeit begrenzt die „entdeckte" Oberfläche).
 
 ## Tests
 
