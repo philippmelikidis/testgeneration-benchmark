@@ -23,6 +23,12 @@ class ResultsStore:
         path = self.dir / f"{record_id}.json"
         return ExperimentRecord.model_validate_json(path.read_text(encoding="utf-8"))
 
+    def delete(self, record_id: str) -> None:
+        try:
+            (self.dir / f"{record_id}.json").unlink(missing_ok=True)
+        except OSError:
+            pass
+
     def list_ids(self) -> list[str]:
         """Record ids, newest first (ids are timestamp-prefixed)."""
         return sorted((p.stem for p in self.dir.glob("*.json")), reverse=True)

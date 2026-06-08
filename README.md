@@ -71,12 +71,38 @@ ollama pull qwen2.5-coder:7b   # Generierung
 ollama pull qwen2.5:14b        # Judge (stärkeres Modell empfohlen)
 ```
 
+**Ollama Cloud (gehostet, mit API-Key)** — in `.env`:
+
+```ini
+TCGEN_LLM_PROVIDER=ollama
+TCGEN_OLLAMA_BASE_URL=https://ollama.com
+TCGEN_OLLAMA_API_KEY=...
+TCGEN_OLLAMA_MODEL=gpt-oss:120b
+TCGEN_OLLAMA_JUDGE_MODEL=gpt-oss:120b
+```
+
+Derselbe Provider deckt lokal und Cloud ab: ohne Key → lokaler Daemon, mit Key +
+`https://ollama.com` → Cloud (Bearer-Auth, Cloud-Modelle wie `gpt-oss:120b`).
+
 **OpenAI (optional)** — in `.env`:
 
 ```ini
 TCGEN_LLM_PROVIDER=openai
 TCGEN_OPENAI_API_KEY=sk-...
 ```
+
+**Gemini (optional, schnell, gehostet)** — in `.env`:
+
+```ini
+TCGEN_LLM_PROVIDER=gemini
+TCGEN_GEMINI_API_KEY=...
+TCGEN_GEMINI_MODEL=gemini-2.5-flash
+TCGEN_GEMINI_JUDGE_MODEL=gemini-2.5-flash   # oder gemini-2.5-pro für besseren Judge
+```
+
+Hinweis: Gemini beschleunigt die LLM-Stufen (Skript_L, Skript_H, Judge) deutlich.
+Der **Crawler ist browser-gebunden und wird dadurch nicht schneller** — seine
+Laufzeit ist reine Playwright-Exploration ohne LLM.
 
 `.env` aus `.env.example` kopieren und anpassen:
 

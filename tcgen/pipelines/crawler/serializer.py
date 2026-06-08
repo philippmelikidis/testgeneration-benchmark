@@ -24,7 +24,9 @@ _TEST_TEMPLATE = '''
 def test_scenario_{idx}(page: Page) -> None:
     """{summary}"""
 {body}
-    expect(page.locator("body")).to_be_visible()
+    # Robust smoke assertion: body present in the DOM (avoids false "hidden"
+    # failures when a modal/sidenav overlay is open at the end of the scenario).
+    expect(page.locator("body")).to_be_attached()
 '''
 
 

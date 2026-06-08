@@ -10,7 +10,7 @@ import tempfile
 from collections import defaultdict
 from pathlib import Path
 
-from config.settings import GENERATED_DIR, Settings, get_settings
+from config.settings import GENERATED_DIR, Settings, get_settings, load_target
 from tcgen.orchestration.models import ExecutionResult, GeneratedScript
 from tcgen.runner.metrics import objective
 
@@ -28,23 +28,36 @@ import re
 import pytest
 
 
+_DISMISS_SELECTORS = {selectors}
+
+
 def _register_overlay_handlers(page):
     """Auto-dismiss welcome/cookie overlays whenever they would block an action.
 
     Uses Playwright's add_locator_handler: the engine itself invokes the handler
-    when one of these overlays intercepts an action, then retries the action.
-    Robust (no monkeypatching) and applied identically to every pipeline.
+    when one of these overlays intercepts an action, then retries it. Robust (no
+    monkeypatching) and applied identically to every pipeline.
 
-    Only PRECISE, STRING-based locators are used here. Regex names (e.g. with a
-    \\b word boundary) are NOT valid in Playwright's selector engine and raise
-    InvalidSelectorError on every action, so they are deliberately avoided.
+    Target-specific CSS selectors (from the target config) come first because
+    they are the most reliable; generic role-based locators are fallbacks. Regex
+    names are deliberately avoided — they raise InvalidSelectorError in
+    Playwright's selector engine.
     """
-    candidates = [
-        page.get_by_role("button", name="dismiss cookie message"),  # cookie: "Me want it!"
-        page.get_by_role("button", name="Dismiss"),                 # welcome banner
-        page.get_by_label("Close Welcome Banner"),                  # welcome (X)
-    ]
-    for _loc in candidates:
+    locators = []
+    for _sel in _DISMISS_SELECTORS:
+        try:
+            locators.append(page.locator(_sel))
+        except Exception:
+            pass
+    for _factory in (
+        lambda: page.get_by_role("button", name="dismiss cookie message"),
+        lambda: page.get_by_role("button", name="Close Welcome Banner"),
+    ):
+        try:
+            locators.append(_factory())
+        except Exception:
+            pass
+    for _loc in locators:
         try:
             page.add_locator_handler(_loc, lambda *a, loc=_loc: loc.first.click(timeout=2000))
         except Exception:
@@ -108,15 +121,22 @@ class TestRunner:
     def _materialise(self, script: GeneratedScript) -> Path:
         out_dir = GENERATED_DIR / script.app_key
         out_dir.mkdir(parents=True, exist_ok=True)
-        self._write_conftest(out_dir)
+        self._write_conftest(out_dir, script.app_key)
         path = out_dir / f"test_{script.pipeline.value}.py"
         path.write_text(script.code, encoding="utf-8")
         if script.path is None:
             script.path = str(path)
         return path
 
-    def _write_conftest(self, out_dir: Path) -> None:
-        conftest = _CONFTEST_TEMPLATE.format(timeout=self.settings.test_action_timeout_ms)
+    def _write_conftest(self, out_dir: Path, app_key: str) -> None:
+        try:
+            selectors = load_target(app_key).dismiss_selectors
+        except Exception:  # noqa: BLE001
+            selectors = []
+        conftest = _CONFTEST_TEMPLATE.format(
+            timeout=self.settings.test_action_timeout_ms,
+            selectors=repr(list(selectors)),
+        )
         (out_dir / "conftest.py").write_text(conftest, encoding="utf-8")
 
     def _run_once(self, path: Path, *, label: str) -> dict:

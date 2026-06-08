@@ -113,6 +113,11 @@ class PipelineResult(BaseModel):
     judge: JudgeScores = Field(default_factory=JudgeScores)
     iso: Iso25010 = Field(default_factory=Iso25010)
     error: str | None = None
+    # Repetition aggregation (>1 run): execution/judge/iso above hold the MEAN.
+    n_runs: int = 1
+    metric_std: dict[str, float] = Field(default_factory=dict)
+    anomalies: list[str] = Field(default_factory=list)
+    samples: list[dict] = Field(default_factory=list)  # per-run flattened metrics
 
 
 class ExperimentRecord(BaseModel):

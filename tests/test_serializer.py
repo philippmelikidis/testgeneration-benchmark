@@ -25,7 +25,7 @@ def test_serialize_produces_valid_pytest_module():
     assert "from playwright.sync_api import Page, expect" in code
     assert "def test_scenario_1(page: Page)" in code
     assert 'page.goto("http://localhost:8080/")' in code
-    assert "expect(page.locator(\"body\")).to_be_visible()" in code
+    assert 'expect(page.locator("body")).to_be_attached()' in code
 
 
 def test_serialized_module_compiles():

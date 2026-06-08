@@ -11,11 +11,17 @@ def _build(settings: Settings, model: str) -> LLMProvider:
     if settings.llm_provider == "ollama":
         from tcgen.llm.ollama_provider import OllamaProvider
 
-        return OllamaProvider(model, base_url=settings.ollama_base_url, **common)
+        return OllamaProvider(model, base_url=settings.ollama_base_url,
+                              api_key=settings.ollama_api_key,
+                              think=settings.ollama_think, **common)
     if settings.llm_provider == "openai":
         from tcgen.llm.openai_provider import OpenAIProvider
 
         return OpenAIProvider(model, api_key=settings.openai_api_key, **common)
+    if settings.llm_provider == "gemini":
+        from tcgen.llm.gemini_provider import GeminiProvider
+
+        return GeminiProvider(model, api_key=settings.gemini_api_key, **common)
     raise ValueError(f"Unknown provider: {settings.llm_provider!r}")
 
 

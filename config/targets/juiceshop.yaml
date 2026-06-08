@@ -22,6 +22,11 @@ avoid_url_substrings:
   - "#/logout"
   - "#/complain"
 
+# Blocking overlays the harness auto-dismisses (welcome dialog + cookie banner).
+dismiss_selectors:
+  - "#dismissWelcomeButton"
+  - "a.cc-dismiss"
+
 user_stories:
   - id: "US-1"
     title: "Produktsuche"

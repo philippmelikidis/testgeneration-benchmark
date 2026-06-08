@@ -1,8 +1,11 @@
-"""Local Ollama backend (default, no API cost).
+"""Ollama backend — local daemon or Ollama Cloud.
 
-Requires a running Ollama daemon (``ollama serve``) and a pulled model, e.g.::
+Local (default, no API cost): run ``ollama serve`` and pull a model, e.g.
+``ollama pull qwen2.5-coder:7b``.
 
-    ollama pull qwen2.5-coder:7b
+Ollama Cloud (hosted): set ``base_url`` to ``https://ollama.com`` and pass an
+``api_key``; the client then authenticates with a Bearer token and can use cloud
+models such as ``gpt-oss:120b``.
 """
 
 from __future__ import annotations
@@ -13,13 +16,20 @@ from tcgen.llm.base import LLMProvider, Message
 
 
 class OllamaProvider(LLMProvider):
-    def __init__(self, model: str, *, base_url: str = "http://localhost:11434", **kw):
+    def __init__(self, model: str, *, base_url: str = "http://localhost:11434",
+                 api_key: str = "", think: bool = False, **kw):
         super().__init__(model, **kw)
         # Imported lazily so the package imports without ollama installed.
         import ollama
 
-        self._client = ollama.Client(host=base_url)
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else None
+        self._client = ollama.Client(host=base_url, headers=headers)
         self.base_url = base_url
+        self.is_cloud = bool(api_key)
+        # Thinking models (glm-5.1, gpt-oss, deepseek) otherwise spend the token
+        # budget on reasoning and leave `content` empty/truncated. We disable
+        # visible reasoning so the answer (the code) goes straight to `content`.
+        self.think = think
 
     @property
     def name(self) -> str:
@@ -42,10 +52,21 @@ class OllamaProvider(LLMProvider):
             "temperature": self.temperature if temperature is None else temperature,
             "num_predict": self.max_tokens if max_tokens is None else max_tokens,
         }
-        resp = self._client.chat(
+        kwargs = dict(
             model=self.model,
             messages=list(messages),
             options=options,
             format="json" if json_mode else "",
         )
-        return resp["message"]["content"]
+        try:
+            resp = self._client.chat(**kwargs, think=self.think)
+        except TypeError:
+            # Older ollama-python without the `think` kwarg.
+            resp = self._client.chat(**kwargs)
+        msg = resp["message"]
+        content = msg.get("content") or ""
+        if not content.strip():
+            # Defensive: if a thinking model still left content empty, fall back
+            # to the reasoning text so downstream extraction has something.
+            content = msg.get("thinking") or ""
+        return content

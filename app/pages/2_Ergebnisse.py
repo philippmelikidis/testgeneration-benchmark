@@ -26,6 +26,14 @@ if not ids:
 default_id = st.session_state.get("last_record_id", ids[0])
 default_idx = ids.index(default_id) if default_id in ids else 0
 record_id = st.selectbox("Experiment", ids, index=default_idx)
+
+dc1, dc2 = st.columns([1, 3])
+with dc1:
+    if st.button("Experiment löschen", help="Löscht diesen Ergebnis-Datensatz."):
+        store.delete(record_id)
+        st.session_state.pop("last_record_id", None)
+        st.rerun()
+
 record = store.load(record_id)
 
 st.markdown(
@@ -36,13 +44,18 @@ st.markdown(
 results = record.pipelines
 rows = [flatten_result(r) for r in results]
 labels = [r["script"] for r in rows]
+std_by_label = {r.script.pipeline.script_label: r.metric_std for r in results}
+max_runs = max((r.n_runs for r in results), default=1)
+if max_runs > 1:
+    st.caption(f"Wiederholungen pro LLM-Pipeline: {max_runs} — Werte sind "
+               f"Mittelwerte, „± x“ ist die Standardabweichung.")
 
 # --- summary metric cards -------------------------------------------------- #
 st.markdown("### Überblick")
 cols = st.columns(max(len(rows), 1))
-for col, row in zip(cols, rows):
+for col, row, result in zip(cols, rows, results):
     with col:
-        st.markdown(f"**{row['script']}**  \n`{row['pipeline']}`")
+        st.markdown(f"**{row['script']}**  \n`{row['pipeline']}` · {result.n_runs}×")
         st.metric("ISO Functional Suitability", ui.fmt(row["iso_overall"]))
         st.metric("Ausführbar / grün",
                   f"{ui.fmt(row['executed'])} / {ui.fmt(row['passed'])}")
@@ -50,17 +63,37 @@ for col, row in zip(cols, rows):
         if row["error"]:
             st.error(row["error"], icon=None)
 
+
+def _cell(value, key, label_key) -> str:
+    s = std_by_label.get(label_key, {}).get(key)
+    base = ui.fmt(value)
+    if s and isinstance(value, (int, float)) and not isinstance(value, bool):
+        return f"{base} ± {s:.3f}"
+    return base
+
+
 # --- comparison table (metric x pipeline) ---------------------------------- #
 st.markdown("### Vergleichstabelle — Metrik × Pipeline")
 arrow = {True: " ↑", False: " ↓", None: ""}
 table: dict[str, dict[str, str]] = {}
 for key, label, higher in METRIC_COLUMNS:
     metric_label = label + arrow[higher]
-    table[metric_label] = {row["script"]: ui.fmt(row.get(key)) for row in rows}
+    table[metric_label] = {row["script"]: _cell(row.get(key), key, row["script"])
+                           for row in rows}
 df = pd.DataFrame(table).T
 df = df[labels] if all(c in df.columns for c in labels) else df
 st.dataframe(df, use_container_width=True)
-st.caption("↑ = höher ist besser, ↓ = niedriger ist besser. „—“ = nicht verfügbar.")
+st.caption("↑ = höher ist besser, ↓ = niedriger ist besser. „—“ = nicht verfügbar. "
+           "„± x“ = Standardabweichung über die Wiederholungen.")
+
+# --- anomalies ------------------------------------------------------------- #
+anomaly_results = [r for r in results if r.anomalies]
+if anomaly_results:
+    st.markdown("### Auffälligkeiten (über die Wiederholungen)")
+    for r in anomaly_results:
+        st.markdown(f"**{r.script.pipeline.script_label}**")
+        for a in r.anomalies:
+            st.markdown(f"- {a}")
 
 # --- ISO breakdown chart --------------------------------------------------- #
 st.markdown("### ISO/IEC 25010 — Functional Suitability")

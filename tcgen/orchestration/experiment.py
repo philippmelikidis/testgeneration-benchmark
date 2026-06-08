@@ -1,11 +1,14 @@
 """End-to-end experiment runner.
 
-Generates scripts for the selected pipelines, executes them, scores them with
-the DeepEval judge, maps the result onto ISO 25010, and persists one
-:class:`ExperimentRecord`. Progress is reported through a weighted
-:class:`~tcgen.progress.Progress` so the UI/job layer can show an overall
-percentage plus live log lines. Each pipeline is isolated: a failure in one is
-recorded as an error and does not abort the others.
+For each selected pipeline it generates a script, executes it, scores it with the
+DeepEval judge, and maps the result onto ISO 25010. To account for LLM
+non-determinism, the LLM stages (Skript_L, Skript_H) and the judge are repeated
+``repetitions`` times and aggregated into a single result: the mean is the
+headline, with per-metric standard deviation and anomalies reported separately.
+The crawler is deterministic and is generated once, then re-evaluated per run.
+
+A user-story filter scopes which stories drive the hybrid refiner and the
+story-aware judge; Methode 1 (crawler, LLM agent) stays requirement-free.
 """
 
 from __future__ import annotations
@@ -16,7 +19,14 @@ import uuid
 from typing import Optional
 
 from config.settings import Settings, TargetApp, get_settings, load_target
+from tcgen.orchestration.aggregate import (
+    aggregate_stats,
+    flatten_result,
+    mean_execution,
+    mean_judge,
+)
 from tcgen.orchestration.models import (
+    ExecutionResult,
     ExperimentRecord,
     GeneratedScript,
     JudgeScores,
@@ -35,13 +45,24 @@ from tcgen.runner.metrics.iso25010 import map_to_iso
 
 log = logging.getLogger(__name__)
 
-# Phase weights (generation dominates wall-clock time on LLM pipelines).
-_W_GEN, _W_EXEC, _W_JUDGE = 3.0, 2.0, 1.0
-
 
 def _log_sink(pct: Optional[float], message: str) -> None:
     prefix = f"[{pct * 100:5.1f}%] " if pct is not None else "         "
     log.info("%s%s", prefix, message)
+
+
+def _check_reachable(url: str, timeout: float = 4.0) -> str | None:
+    """Return None if the target responds, else a short reason string."""
+    import urllib.error
+    import urllib.request
+
+    try:
+        urllib.request.urlopen(url, timeout=timeout)  # noqa: S310 - local target
+        return None
+    except urllib.error.HTTPError:
+        return None  # server responded (even 4xx/5xx) -> it is up
+    except Exception as exc:  # noqa: BLE001
+        return str(exc)
 
 
 class ExperimentRunner:
@@ -58,12 +79,23 @@ class ExperimentRunner:
         *,
         include_hybrid: bool = False,
         domain_context: str = "",
+        user_story_ids: list[str] | None = None,
+        repetitions: int | None = None,
         sink: Sink | None = None,
     ) -> ExperimentRecord:
         sink = sink or _log_sink
         target = load_target(app_key)
-        pipelines = self._resolve_pipelines(pipelines, include_hybrid)
+        target = self._filter_stories(target, user_story_ids)
 
+        unreachable = _check_reachable(target.base_url)
+        if unreachable:
+            msg = (f"Ziel-App {target.base_url} nicht erreichbar — läuft der "
+                   f"Container/Server? ({unreachable})")
+            sink(None, msg)
+            raise RuntimeError(msg)
+
+        pipelines = self._resolve_pipelines(pipelines, include_hybrid)
+        reps = max(1, repetitions if repetitions is not None else self.settings.repetitions)
         record = ExperimentRecord(
             id=self._new_id(app_key),
             app_key=app_key,
@@ -71,37 +103,62 @@ class ExperimentRunner:
             provider=self.settings.llm_provider,
             model=self.settings.generation_model,
         )
-        scripts: dict[Pipeline, GeneratedScript] = {}
-        progress = Progress(self._total_weight(pipelines), sink)
 
+        progress = Progress(self._total_units(pipelines, reps), sink)
+        crawler_in = Pipeline.CRAWLER in pipelines
+
+        # Crawler is deterministic -> generate once and reuse across runs.
+        crawler_script: GeneratedScript | None = None
+        if crawler_in:
+            ph = progress.phase(1, "Skript_C: Generierung")
+            try:
+                crawler_script = crawler_pipeline.generate(target, self.settings, phase=ph)
+            except Exception as exc:  # noqa: BLE001
+                ph.log(f"FEHLER Crawler-Generierung: {exc}")
+                log.exception("Crawler generation failed")
+
+        # Collect samples: pipeline -> list of (script, execution, judge)
+        collected: dict[Pipeline, list[tuple]] = {}
+        gen_errors: dict[Pipeline, str] = {}
         for pipeline in pipelines:
             label = pipeline.script_label
-            gen_phase = progress.phase(_W_GEN, f"{label}: Generierung")
-            try:
-                script = self._generate(pipeline, target, scripts, gen_phase, domain_context)
-                scripts[pipeline] = script
-            except Exception as exc:  # noqa: BLE001
-                log.exception("Generation failed for %s", pipeline)
-                gen_phase.log(f"FEHLER bei Generierung {label}: {exc}")
-                record.pipelines.append(PipelineResult(
-                    script=GeneratedScript(pipeline=pipeline, app_key=app_key, code=""),
-                    error=f"generation failed: {exc}",
-                ))
-                continue
+            samples: list[tuple] = []
+            for i in range(reps):
+                tag = f"(Lauf {i + 1}/{reps})"
+                try:
+                    script = self._generate(pipeline, target, crawler_script,
+                                            domain_context, progress, tag, reps_done=i)
+                except Exception as exc:  # noqa: BLE001
+                    gen_errors[pipeline] = f"generation failed: {exc}"
+                    log.exception("Generation failed for %s", pipeline)
+                    continue
+                ex = jd = None
+                if self.evaluate:
+                    ex = self._execute(script, progress, label, tag)
+                    jd = self._judge(script, pipeline, target, progress, label, tag)
+                samples.append((script, ex, jd))
+            collected[pipeline] = samples
 
-            result = PipelineResult(script=script)
-            if self.evaluate:
-                self._evaluate_into(result, target, progress)
+        denom = self._coverage_denominator(crawler_script, crawler_in, collected)
+        for pipeline in pipelines:
+            result = self._aggregate(collected[pipeline], denom, gen_errors.get(pipeline),
+                                     pipeline, app_key)
             record.pipelines.append(result)
 
-        if self.evaluate:
-            self._finalize_iso(record, scripts)
-
+        record.notes = (f"coverage_denominator={denom} repetitions={reps} "
+                        f"stories={[s.id for s in target.user_stories]}")
         path = self.store.save(record)
         progress.finish(f"gespeichert: {path.name}")
         return record
 
     # ------------------------------------------------------------------ #
+    @staticmethod
+    def _filter_stories(target: TargetApp, ids: list[str] | None) -> TargetApp:
+        if not ids:
+            return target
+        kept = [s for s in target.user_stories if s.id in ids]
+        return target.model_copy(update={"user_stories": kept})
+
     def _resolve_pipelines(self, pipelines, include_hybrid) -> list[Pipeline]:
         pipelines = list(pipelines or [Pipeline.CRAWLER, Pipeline.LLM_AGENT])
         if include_hybrid and Pipeline.HYBRID not in pipelines:
@@ -110,73 +167,100 @@ class ExperimentRunner:
             pipelines.insert(0, Pipeline.CRAWLER)
         return pipelines
 
-    def _total_weight(self, pipelines: list[Pipeline]) -> float:
-        per = _W_GEN + (_W_EXEC + _W_JUDGE if self.evaluate else 0.0)
-        return per * len(pipelines)
+    def _total_units(self, pipelines: list[Pipeline], reps: int) -> float:
+        units = 1 if Pipeline.CRAWLER in pipelines else 0  # crawler gen once
+        for p in pipelines:
+            gen = 0 if p is Pipeline.CRAWLER else reps      # L/H regenerate per run
+            units += gen + (2 * reps if self.evaluate else 0)  # exec + judge per run
+        return max(units, 1)
 
-    def _generate(self, pipeline: Pipeline, target: TargetApp,
-                  scripts: dict[Pipeline, GeneratedScript], phase,
-                  domain_context: str) -> GeneratedScript:
+    def _generate(self, pipeline, target, crawler_script, domain_context,
+                  progress, tag, reps_done) -> GeneratedScript:
         if pipeline is Pipeline.CRAWLER:
-            return crawler_pipeline.generate(target, self.settings, phase=phase)
+            if crawler_script is None:
+                raise RuntimeError("crawler generation failed earlier")
+            return crawler_script  # reuse deterministic artefact
+        ph = progress.phase(1, f"{pipeline.script_label}: Generierung {tag}")
         if pipeline is Pipeline.LLM_AGENT:
-            return agent_generate(target, self.settings, phase=phase)
+            return agent_generate(target, self.settings, phase=ph)
         if pipeline is Pipeline.HYBRID:
-            base = scripts.get(Pipeline.CRAWLER)
-            if base is None:
-                raise RuntimeError("Hybrid pipeline requires a crawler script first.")
-            return hybrid_generate(base, target, self.settings,
-                                   domain_context=domain_context, phase=phase)
+            if crawler_script is None:
+                raise RuntimeError("Hybrid requires a crawler script.")
+            return hybrid_generate(crawler_script, target, self.settings,
+                                   domain_context=domain_context, phase=ph)
         raise ValueError(f"Unknown pipeline {pipeline!r}")
 
-    def _evaluate_into(self, result: PipelineResult, target: TargetApp,
-                       progress: Progress) -> None:
-        label = result.script.pipeline.script_label
-        exec_phase = progress.phase(_W_EXEC, f"{label}: Ausführung")
+    def _execute(self, script, progress, label, tag):
+        ph = progress.phase(1, f"{label}: Ausführung {tag}")
+        if not script.code.strip():
+            ph.log("leeres Skript — Ausführung übersprungen")
+            return ExecutionResult(first_error="leeres Skript (LLM lieferte keinen Code)")
         try:
-            result.execution = self.runner.run(result.script, phase=exec_phase)
+            return self.runner.run(script, phase=ph)
         except Exception as exc:  # noqa: BLE001
-            result.error = f"execution failed: {exc}"
-            exec_phase.log(f"FEHLER Ausführung {label}: {exc}")
+            ph.log(f"FEHLER Ausführung {label}: {exc}")
             log.exception("Execution failed for %s", label)
+            return ExecutionResult(first_error=str(exc))
 
-        judge_phase = progress.phase(_W_JUDGE, f"{label}: Bewertung")
+    def _judge(self, script, pipeline, target, progress, label, tag):
+        ph = progress.phase(1, f"{label}: Bewertung {tag}")
+        if not script.code.strip():
+            ph.log("leeres Skript — Bewertung übersprungen")
+            return JudgeScores()
         try:
-            judge = DeepEvalJudge(self.settings)
-            # Methode 2 (Skript_H) is graded against the user stories it was given;
-            # Methode 1 (Skript_C/L) is graded intrinsically (it never saw them).
-            story_block = (
-                _story_block(target.user_stories)
-                if result.script.pipeline is Pipeline.HYBRID else None
-            )
-            result.judge = judge.judge(
-                result.script.code, target.base_url,
-                story_block=story_block, phase=judge_phase)
+            story_block = (_story_block(target.user_stories)
+                           if pipeline is Pipeline.HYBRID else None)
+            return DeepEvalJudge(self.settings).judge(
+                script.code, target.base_url, story_block=story_block, phase=ph)
         except Exception as exc:  # noqa: BLE001
-            result.judge = JudgeScores()
-            result.error = (result.error or "") + f" | judge failed: {exc}"
-            judge_phase.log(f"FEHLER Judge {label}: {exc}")
+            ph.log(f"FEHLER Judge {label}: {exc}")
             log.exception("Judge failed for %s", label)
+            return JudgeScores()
 
-    def _finalize_iso(self, record: ExperimentRecord,
-                      scripts: dict[Pipeline, GeneratedScript]) -> None:
-        """Compute ISO with a single, shared completeness denominator.
+    def _coverage_denominator(self, crawler_script, crawler_in, collected) -> int | None:
+        if crawler_in and crawler_script is not None:
+            d = crawler_script.meta.get("discovered_elements")
+            if d:
+                return d
+        exercised = [
+            ex.exercised_coverage
+            for samples in collected.values()
+            for (_s, ex, _j) in samples if ex is not None
+        ]
+        m = max(exercised, default=0)
+        return m or None
 
-        Denominator = interactable elements the crawler discovered on the app.
-        Without a crawler in the run, fall back to the max exercised coverage
-        observed across pipelines (relative), else leave completeness undefined.
-        """
-        denom: int | None = None
-        crawler_script = scripts.get(Pipeline.CRAWLER)
-        if crawler_script is not None:
-            denom = crawler_script.meta.get("discovered_elements") or None
-        if not denom:
-            exercised = [r.execution.exercised_coverage for r in record.pipelines]
-            denom = max(exercised) if exercised and max(exercised) > 0 else None
+    def _aggregate(self, samples, denom, gen_error, pipeline, app_key) -> PipelineResult:
+        if not samples:
+            return PipelineResult(
+                script=GeneratedScript(pipeline=pipeline, app_key=app_key, code=""),
+                error=gen_error or "no samples produced",
+            )
+        if all(not s[0].code.strip() for s in samples):
+            gen_error = gen_error or "LLM lieferte leeren Code (Token-Limit/Thinking?)"
+        if not self.evaluate:
+            sc, _, _ = samples[0]
+            return PipelineResult(script=sc, n_runs=len(samples))
 
-        for result in record.pipelines:
-            result.iso = map_to_iso(result.execution, result.judge, denom)
-        record.notes = (record.notes + f" coverage_denominator={denom}").strip()
+        reps_flat = []
+        for sc, ex, jd in samples:
+            iso = map_to_iso(ex, jd, denom)
+            reps_flat.append(flatten_result(
+                PipelineResult(script=sc, execution=ex, judge=jd, iso=iso)))
+        std, anomalies = aggregate_stats(reps_flat)
+        mexec = mean_execution([ex for _s, ex, _j in samples])
+        mjudge = mean_judge([jd for _s, _e, jd in samples])
+        return PipelineResult(
+            script=samples[0][0],
+            execution=mexec,
+            judge=mjudge,
+            iso=map_to_iso(mexec, mjudge, denom),
+            error=gen_error,
+            n_runs=len(samples),
+            metric_std=std,
+            anomalies=anomalies,
+            samples=reps_flat,
+        )
 
     @staticmethod
     def _new_id(app_key: str) -> str:

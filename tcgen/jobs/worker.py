@@ -45,6 +45,8 @@ def run_job(job_id: str) -> int:
             [Pipeline(p) for p in job.pipelines],
             include_hybrid=job.include_hybrid,
             domain_context=job.domain_context,
+            user_story_ids=job.user_story_ids or None,
+            repetitions=job.repetitions,
             sink=sink,
         )
         job.result_id = record.id

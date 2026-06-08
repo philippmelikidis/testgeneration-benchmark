@@ -16,7 +16,7 @@ from config.settings import RESULTS_DIR
 JOBS_DIR = RESULTS_DIR / "jobs"
 _MAX_LOG_LINES = 400  # kept inline for the UI; full log also goes to <id>.log
 
-JobStatus = Literal["pending", "running", "done", "error"]
+JobStatus = Literal["pending", "running", "done", "error", "cancelled"]
 
 
 def _now() -> str:
@@ -30,6 +30,8 @@ class JobState(BaseModel):
     include_hybrid: bool = False
     evaluate: bool = True
     domain_context: str = ""
+    user_story_ids: list[str] = Field(default_factory=list)
+    repetitions: int = 1
 
     status: JobStatus = "pending"
     percent: float = 0.0
@@ -90,6 +92,14 @@ class JobStore:
         if len(job.logs) > _MAX_LOG_LINES:
             job.logs = job.logs[-_MAX_LOG_LINES:]
         self.append_log(job.id, stamped)
+
+    def delete(self, job_id: str) -> None:
+        """Remove a job's state, log, and process-log files."""
+        for suffix in (".json", ".log", ".proc.log"):
+            try:
+                (self.dir / f"{job_id}{suffix}").unlink(missing_ok=True)
+            except OSError:
+                pass
 
     def list_ids(self) -> list[str]:
         return sorted((p.stem for p in self.dir.glob("*.json")), reverse=True)

@@ -37,21 +37,33 @@ class Settings(BaseSettings):
     )
 
     # --- provider selection ---
-    llm_provider: Literal["ollama", "openai"] = "ollama"
+    llm_provider: Literal["ollama", "openai", "gemini"] = "ollama"
 
-    # --- Ollama ---
+    # --- Ollama (local or Ollama Cloud) ---
+    # For Ollama Cloud: set base_url to https://ollama.com and provide an API key.
     ollama_base_url: str = "http://localhost:11434"
+    ollama_api_key: str = ""  # set for Ollama Cloud (Bearer auth)
     ollama_model: str = "qwen2.5-coder:7b"
     ollama_judge_model: str = "qwen2.5:14b"
+    # Keep reasoning OFF for thinking models so the code lands in `content`
+    # instead of being buried in/truncated by the reasoning stream.
+    ollama_think: bool = False
 
     # --- OpenAI ---
     openai_api_key: str = ""
     openai_model: str = "gpt-4o"
     openai_judge_model: str = "gpt-4o"
 
+    # --- Gemini (google-genai) ---
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
+    gemini_judge_model: str = "gemini-2.5-flash"
+
     # --- generation behaviour ---
     llm_temperature: float = 0.1
-    llm_max_tokens: int = 4096
+    # Generous so thinking models (e.g. glm-5.1, gpt-oss) have room for the code
+    # AFTER their reasoning tokens; too small truncates the script to nothing.
+    llm_max_tokens: int = 8192
     agent_max_steps: int = 25
     agent_repair: bool = True            # one validate+repair round on Skript_L
     crawler_max_states: int = 40
@@ -62,6 +74,9 @@ class Settings(BaseSettings):
     # --- execution ---
     headless: bool = True
     flakiness_runs: int = 3
+    # How many times the non-deterministic LLM stages (Skript_L/H) and the judge
+    # are repeated; results are aggregated to a mean with std + anomalies.
+    repetitions: int = 1
     # SPA settle: cap for the networkidle wait (Juice Shop polls in the
     # background and never truly idles, so keep this small) + a short paint pause.
     settle_timeout_ms: int = 1500
@@ -73,15 +88,19 @@ class Settings(BaseSettings):
 
     @property
     def generation_model(self) -> str:
-        return self.ollama_model if self.llm_provider == "ollama" else self.openai_model
+        return {
+            "ollama": self.ollama_model,
+            "openai": self.openai_model,
+            "gemini": self.gemini_model,
+        }[self.llm_provider]
 
     @property
     def judge_model(self) -> str:
-        return (
-            self.ollama_judge_model
-            if self.llm_provider == "ollama"
-            else self.openai_judge_model
-        )
+        return {
+            "ollama": self.ollama_judge_model,
+            "openai": self.openai_judge_model,
+            "gemini": self.gemini_judge_model,
+        }[self.llm_provider]
 
 
 @functools.lru_cache(maxsize=1)
@@ -115,6 +134,10 @@ class TargetApp(BaseModel):
     # Hints that help both pipelines stay on-task (not hard selectors).
     entry_paths: list[str] = Field(default_factory=lambda: ["/"])
     avoid_url_substrings: list[str] = Field(default_factory=list)
+    # CSS selectors of blocking overlays (welcome dialog, cookie banner). The
+    # test harness auto-dismisses these so they don't intercept actions. This is
+    # environment setup applied identically to every pipeline, not result tuning.
+    dismiss_selectors: list[str] = Field(default_factory=list)
     user_stories: list[UserStory] = Field(default_factory=list)
 
 

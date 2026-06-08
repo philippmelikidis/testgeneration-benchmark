@@ -7,10 +7,21 @@ import re
 
 _FENCE_RE = re.compile(r"```(?:python|py)?\s*\n(.*?)```", re.DOTALL | re.IGNORECASE)
 _OBJ_RE = re.compile(r"\{.*\}", re.DOTALL)
+# Thinking models (glm-5.1, gpt-oss, deepseek, ...) may wrap reasoning in these.
+_THINK_RE = re.compile(r"<think(?:ing)?>.*?</think(?:ing)?>", re.DOTALL | re.IGNORECASE)
+
+
+def _strip_thinking(text: str) -> str:
+    return _THINK_RE.sub("", text)
 
 
 def extract_code_block(text: str) -> str:
-    """Return the first fenced code block, or the whole text if none is found."""
+    """Return the first fenced code block, or the whole text if none is found.
+
+    Reasoning blocks from thinking models are stripped first so they never leak
+    into the extracted code.
+    """
+    text = _strip_thinking(text)
     m = _FENCE_RE.search(text)
     return (m.group(1) if m else text).strip()
 

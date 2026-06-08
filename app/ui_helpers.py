@@ -88,8 +88,10 @@ def sidebar_status() -> None:
             )
 
 
-_STATUS_LABEL = {"pending": "wartet", "running": "läuft", "done": "fertig", "error": "Fehler"}
-_STATUS_COLOR = {"pending": "#7a869a", "running": "#3b6ea5", "done": "#2f8f5b", "error": "#b3433b"}
+_STATUS_LABEL = {"pending": "wartet", "running": "läuft", "done": "fertig",
+                 "error": "Fehler", "cancelled": "abgebrochen"}
+_STATUS_COLOR = {"pending": "#7a869a", "running": "#3b6ea5", "done": "#2f8f5b",
+                 "error": "#b3433b", "cancelled": "#8a6fae"}
 
 
 def render_job_monitor(job, *, log_lines: int = 40) -> None:
