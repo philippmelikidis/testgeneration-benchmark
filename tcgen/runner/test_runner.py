@@ -59,7 +59,16 @@ def _register_overlay_handlers(page):
             pass
     for _loc in locators:
         try:
-            page.add_locator_handler(_loc, lambda *a, loc=_loc: loc.first.click(timeout=2000))
+            # no_wait_after=True: don't wait for the overlay to visually disappear
+            # after clicking. Without it Playwright re-fires the handler until the
+            # element is hidden, which creates a 10+ iteration loop on animated
+            # banners (e.g. Juice Shop cookie bar) and leaves page.url as None,
+            # breaking subsequent expect(page) assertions.
+            page.add_locator_handler(
+                _loc,
+                lambda *a, loc=_loc: loc.first.click(timeout=2000),
+                no_wait_after=True,
+            )
         except Exception:
             pass
 

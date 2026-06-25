@@ -19,7 +19,7 @@ entry_paths:
 avoid_url_substrings:
   - "route=account/logout"
   - "admin"
-  - "index.php?route=checkout/checkout"  # only reached deliberately via US-3
+  - "index.php?route=checkout/checkout"  # only reached deliberately via US-3/US-7
 
 user_stories:
   - id: "US-1"
@@ -61,3 +61,38 @@ user_stories:
       - "Das Registrierungsformular ist über das Account-Menü erreichbar."
       - "Pflichtfelder (Vorname, Nachname, E-Mail) sind vorhanden."
       - "Nach gültiger Eingabe erscheint eine Bestätigungsseite."
+
+  - id: "US-5"
+    title: "Anmelden"
+    text: >
+      Als registrierter Nutzer möchte ich mich über das Account-Menü anmelden,
+      damit ich meine Bestellungen und Kontodaten einsehen kann.
+    acceptance_criteria:
+      - "Das Login-Formular ist über das Account-Dropdown im Header erreichbar."
+      - "Die Felder für E-Mail und Passwort sind vorhanden."
+      - "Nach korrekter Eingabe wird die 'My Account'-Übersichtsseite angezeigt."
+      - "Der Header bestätigt die Anmeldung durch den sichtbaren Account-Namen."
+
+  - id: "US-6"
+    title: "Warenkorb bearbeiten"
+    text: >
+      Als Besucher möchte ich Artikel aus dem Warenkorb entfernen,
+      damit ich meine Auswahl vor dem Checkout anpassen kann.
+    acceptance_criteria:
+      - "Der Warenkorb ist über das Warenkorb-Icon im Header erreichbar."
+      - "Jeder Artikel im Warenkorb hat einen 'Entfernen'-Button."
+      - "Nach dem Entfernen wird der Warenkorb-Zähler im Header aktualisiert."
+      - "Ein leerer Warenkorb zeigt eine entsprechende Hinweismeldung."
+
+  - id: "US-7"
+    title: "Vollständiger Einkaufsprozess"
+    text: >
+      Als Besucher möchte ich ein Produkt suchen, es in den Warenkorb legen
+      und als Gast zur Kasse gehen, damit ich den gesamten Kaufprozess von der
+      Suche bis zur Eingabe der Rechnungsdaten ohne Konto durchlaufen kann.
+    acceptance_criteria:
+      - "Eine Suche nach 'MacBook' liefert mindestens ein Produkt."
+      - "Das Produkt lässt sich über 'In den Warenkorb' hinzufügen."
+      - "Der Checkout ist über den Warenkorb erreichbar."
+      - "Die Gast-Checkout-Option ist auswählbar."
+      - "Das Formular für Rechnungsdaten wird nach Auswahl der Gast-Option angezeigt."

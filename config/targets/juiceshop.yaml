@@ -67,3 +67,36 @@ user_stories:
       - "Der Willkommens-Dialog lässt sich über 'Dismiss' schließen."
       - "Das Cookie-Banner lässt sich über 'Me want it!' bestätigen."
       - "Nach dem Schließen ist die Produktliste sichtbar."
+
+  - id: "US-5"
+    title: "Anmelden"
+    text: >
+      Als registrierter Nutzer möchte ich mich mit E-Mail und Passwort anmelden,
+      damit ich auf mein Konto zugreifen kann.
+    acceptance_criteria:
+      - "Die Login-Seite ist unter /#/login erreichbar."
+      - "Die Formularfelder für E-Mail und Passwort sind vorhanden."
+      - "Nach gültiger Eingabe wird der Nutzer auf die Startseite weitergeleitet."
+      - "Der Header zeigt das Konto-Icon oder einen Account-Namen als Anmeldebestätigung."
+
+  - id: "US-6"
+    title: "Artikel in den Warenkorb legen"
+    text: >
+      Als Besucher möchte ich ein Produkt in den Warenkorb legen,
+      damit ich es im Kaufprozess weiter verfolgen kann.
+    acceptance_criteria:
+      - "Der 'In den Warenkorb'-Button ist auf einer Produktkarte klickbar."
+      - "Nach dem Klick erscheint eine Bestätigungsmeldung (Snackbar o.ä.)."
+      - "Das Warenkorb-Icon im Header zeigt mindestens 1 Artikel an."
+
+  - id: "US-7"
+    title: "Vollständiger Einkaufsprozess"
+    text: >
+      Als Besucher möchte ich ein Produkt suchen, dessen Detailseite öffnen
+      und es in den Warenkorb legen, damit ich den Kaufprozess von der Suche
+      bis zum Warenkorb ohne Unterbrechung durchlaufen kann.
+    acceptance_criteria:
+      - "Eine Suche nach 'Apple' liefert mindestens eine Produktkarte."
+      - "Ein Klick auf die Produktkarte öffnet den Detail-Dialog mit Name und Preis."
+      - "Über den Detail-Dialog lässt sich das Produkt in den Warenkorb legen."
+      - "Der Warenkorb-Zähler im Header erhöht sich auf mindestens 1."
