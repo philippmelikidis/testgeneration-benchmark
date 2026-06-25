@@ -24,7 +24,6 @@ log = logging.getLogger(__name__)
 _CONFTEST_TEMPLATE = '''\
 """Auto-generated shared test harness (do not edit; rewritten on each run)."""
 
-import re
 import pytest
 
 
@@ -67,7 +66,8 @@ def _register_overlay_handlers(page):
             page.add_locator_handler(
                 _loc,
                 lambda *a, loc=_loc: loc.first.click(timeout=2000),
-                no_wait_after=True,
+                no_wait_after=True,  # don't wait for element to disappear (avoids retry loop)
+                times=1,             # dismiss once per test; banner won't reappear mid-test
             )
         except Exception:
             pass

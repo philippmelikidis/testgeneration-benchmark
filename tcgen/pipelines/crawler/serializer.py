@@ -35,8 +35,10 @@ def _render_scenario(idx: int, actions) -> str:
     for action in actions:
         for code in action.code_lines("page"):
             lines.append(f"    {code}")
-        if action.kind != "fill":
-            lines.append('    expect(page).not_to_have_url("about:blank")')
+    # NOTE: per-step not_to_have_url("about:blank") was removed — it fires as a
+    # Playwright action and triggers locator handlers (e.g. cookie banner), causing
+    # page.url to return None and false failures on SPAs. The final body assertion
+    # below is sufficient as a sanity check.
     summary = " -> ".join(a.describe() for a in actions)[:200]
     body = "\n".join(lines)
     return _TEST_TEMPLATE.format(idx=idx, summary=summary, body=body)
