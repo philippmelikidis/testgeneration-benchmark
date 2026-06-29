@@ -40,13 +40,15 @@ with col_a:
 
 with col_b:
     pipeline_labels = {
-        "Crawler — Skript_C (Methode 1)": Pipeline.CRAWLER,
-        "LLM-Agent — Skript_L (Methode 1)": Pipeline.LLM_AGENT,
+        "Crawler — Skript_C": Pipeline.CRAWLER,
+        "LLM-Agent — Skript_L (ohne Story)": Pipeline.LLM_AGENT,
+        "LLM-Agent + User-Story — Skript_S": Pipeline.LLM_AGENT_STORY,
     }
     chosen = st.multiselect(
-        "Pipelines (Methode 1)",
+        "Pipelines",
         list(pipeline_labels.keys()),
-        default=list(pipeline_labels.keys()),
+        default=["Crawler — Skript_C", "LLM-Agent — Skript_L (ohne Story)"],
+        help="Skript_S = LLM-Agent, der die App erkundet UND die User-Stories bekommt.",
     )
     include_hybrid = st.checkbox("Hybrid — Skript_H (Methode 2) zuschalten", value=False)
     evaluate = st.checkbox("Bewerten (Runner + DeepEval)", value=True,

@@ -8,9 +8,15 @@ User-Stories steuern Methode 2 und dienen als gemeinsamer Bewertungsmaßstab
 
 | Pipeline | Artefakt | Methode | Kurz |
 |----------|----------|---------|------|
-| Crawler   | `Skript_C` | 1 (traditionell) | autonomer Playwright-Crawler, Zustandsgraph → pytest-Skript; **ohne** User-Story |
-| LLM-Agent | `Skript_L` | 1 (LLM-only)     | gleiche Aufgabe wie der Crawler (App autonom erkunden, Testsuite erzeugen); **ohne** User-Story |
-| Hybrid    | `Skript_H` | 2 (Aufsatz)      | LLM verfeinert `Skript_C` **mit** User-Story (+ optionalem Fachkontext): Locator, Assertions, Lesbarkeit |
+| Crawler       | `Skript_C` | traditionell | autonomer Playwright-Crawler, Zustandsgraph → pytest-Skript; **ohne** User-Story |
+| LLM-Agent     | `Skript_L` | LLM-only     | gleiche Aufgabe wie der Crawler (App autonom erkunden, Testsuite erzeugen); **ohne** User-Story |
+| LLM-Agent+Story | `Skript_S` | LLM-only   | LLM-Agent erkundet die App **und** bekommt die User-Stories → testet sie direkt |
+| Hybrid        | `Skript_H` | Aufsatz      | LLM verfeinert `Skript_C` **mit** User-Story (+ optionalem Fachkontext): Locator, Assertions, Lesbarkeit |
+
+Ablation: `Skript_L` vs. `Skript_S` isoliert den Effekt der Anforderungen beim
+LLM-Agenten; `Skript_S` vs. `Skript_H` vergleicht „Agent von Grund auf mit Story"
+gegen „Crawler-Output mit Story veredeln". Bewertung: C/L intrinsisch (sahen keine
+Stories), S/H story-bewusst.
 
 **Methode 1 — fairer A/B ohne Anforderungen:** Crawler und LLM-Agent bekommen
 das exakt gleiche, anforderungsfreie Aufgabengebiet (App autonom erkunden und
@@ -230,7 +236,10 @@ Hallucination, Readability — je [0, 1].
 - Functional Completeness ← genutzte Element-Coverage ÷ **vom Crawler entdeckte
   Elementanzahl** (echter, app-spezifischer Nenner statt Magic-Konstante; pro
   Experiment einheitlich für alle Pipelines).
-- Functional Appropriateness ← mean(Judge-Appropriateness, 1 − Hallucination).
+- Functional Appropriateness ← Judge-Appropriateness (für alle Pipelines gleich).
+  Hallucination ist eine **eigenständige** Metrik (nicht in ISO eingerechnet) und
+  beim Crawler **n/a** — strukturell nicht anwendbar, da er nur real erkundete
+  Elemente serialisiert. So verändert ein n/a-Wert die ISO-Vergleichbarkeit nicht.
 
 **Interpretation (wichtig) — entkoppelte Judge-Bewertung:** Der Judge bewertet
 jede Pipeline mit dem zu ihrer Aufgabe passenden Maßstab:

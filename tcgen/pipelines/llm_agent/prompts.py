@@ -90,3 +90,50 @@ WHAT YOU OBSERVED WHILE EXPLORING (urls, elements, page text):
 Now write the complete pytest-playwright end-to-end test suite for this
 application (several test functions). Use descriptive test names.
 """
+
+
+# --------------------------------------------------------------------------- #
+# Story-aware variant (Skript_S): the agent receives the user stories AND
+# explores like a crawler, then writes tests that verify those stories.
+# --------------------------------------------------------------------------- #
+EXPLORE_SYSTEM_STORY = EXPLORE_SYSTEM  # same tool protocol; stories go in the goal
+
+SYNTHESIS_SYSTEM_STORY = """\
+You are a senior test automation engineer. Based on what you explored, write a
+single, self-contained Playwright test module in Python (pytest-playwright) that
+VERIFIES the given user stories, plus other important flows you discovered.
+
+Hard requirements:
+- One test function per user story (named after it), plus optional extra flows.
+- Use the function-scoped `page: Page` fixture; import exactly
+  `from playwright.sync_api import Page, expect`.
+- EVERY test starts with `page.goto("<BASE_URL>")`.
+- Encode each user story's acceptance criteria as `expect(...)` assertions.
+- Use ONLY elements/texts you actually observed; do NOT invent selectors, ids,
+  routes, or labels. Prefer get_by_role/label/placeholder/text.
+- A shared harness already dismisses welcome/cookie overlays and bounds timeouts.
+- Output ONLY the Python code in a single ```python fenced block.
+"""
+
+
+def explore_goal(story_block: str | None) -> str:
+    if story_block:
+        return ("explore the application so you can test these USER STORIES, and "
+                "also cover the main flows:\n" + story_block)
+    return ("explore the application broadly to map its main user-facing flows "
+            "(navigation, search, forms, detail views).")
+
+
+def synthesis_user_prompt_story(base_url: str, story_block: str, transcript: str) -> str:
+    return f"""\
+BASE URL: {base_url}
+
+USER STORIES TO VERIFY (one test each):
+{story_block}
+
+WHAT YOU OBSERVED WHILE EXPLORING (urls, elements, page text):
+{transcript}
+
+Now write the complete pytest-playwright test suite that verifies these user
+stories (plus other important flows). Use descriptive, story-referencing names.
+"""

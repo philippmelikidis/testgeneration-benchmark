@@ -55,3 +55,14 @@ def test_pipeline_by_helper():
     rec = _record()
     assert rec.by_pipeline(Pipeline.CRAWLER) is not None
     assert rec.by_pipeline(Pipeline.HYBRID) is None
+
+
+def test_record_to_markdown_is_complete():
+    from tcgen.orchestration.report import record_to_markdown
+
+    md = record_to_markdown(_record())
+    assert "# Ergebnisbericht" in md
+    assert "Vergleichstabelle" in md
+    assert "Skript_C" in md
+    assert "```python" in md           # generated script included
+    assert "ISO: Functional Suitability" in md

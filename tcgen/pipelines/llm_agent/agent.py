@@ -17,8 +17,11 @@ from tcgen.pipelines.llm_agent.prompts import (
     EXPLORE_SYSTEM,
     REPAIR_SYSTEM,
     SYNTHESIS_SYSTEM,
+    SYNTHESIS_SYSTEM_STORY,
+    explore_goal,
     repair_user_prompt,
     synthesis_user_prompt,
+    synthesis_user_prompt_story,
 )
 from tcgen.util import (
     extract_code_block,
@@ -57,10 +60,13 @@ class LLMAgent:
         self.provider = provider or get_provider(self.settings)
 
     # ------------------------------------------------------------------ #
-    def generate(self, phase: Phase | None = None) -> GeneratedScript:
+    def generate(self, phase: Phase | None = None, *, with_stories: bool = False) -> GeneratedScript:
         phase = phase or NullPhase()
         t0 = time.time()
-        phase.update(0.02, "Agent startet Exploration (Crawler-Aufgabe, ohne User-Story)")
+        pipeline = Pipeline.LLM_AGENT_STORY if with_stories else Pipeline.LLM_AGENT
+        story_block = _story_block(self.target.user_stories) if with_stories else None
+        mode = "mit User-Story" if with_stories else "ohne User-Story"
+        phase.update(0.02, f"Agent startet Exploration (Crawler-Aufgabe, {mode})")
         with BrowserSession(
             self.target.base_url,
             headless=self.settings.headless,
@@ -68,14 +74,14 @@ class LLMAgent:
             settle_pause_ms=self.settings.settle_pause_ms,
         ) as session:
             observation = session.navigate(self.target.entry_paths[0])
-            action_log, pages = self._explore(session, observation, phase)
+            action_log, pages = self._explore(session, observation, phase, story_block)
         phase.update(0.9, "Synthese der Testsuite aus Beobachtungen")
         transcript = self._build_transcript(action_log, pages)
-        code = self._synthesize(transcript)
+        code = self._synthesize(transcript, story_block)
         code = self._maybe_repair(code, phase)
-        phase.update(1.0, f"Skript_L erzeugt ({len(code.splitlines())} Zeilen)")
+        phase.update(1.0, f"{pipeline.script_label} erzeugt ({len(code.splitlines())} Zeilen)")
         return GeneratedScript(
-            pipeline=Pipeline.LLM_AGENT,
+            pipeline=pipeline,
             app_key=self.target.key,
             language="python",
             code=code,
@@ -85,23 +91,24 @@ class LLMAgent:
             meta={
                 "agent_steps": len(action_log),
                 "pages_observed": len(pages),
-                "user_story_used": False,
+                "user_story_used": with_stories,
             },
         )
 
     # ------------------------------------------------------------------ #
-    def _explore(self, session: BrowserSession, observation, phase: Phase):
+    def _explore(self, session: BrowserSession, observation, phase: Phase,
+                 story_block: str | None = None):
         action_log: list[str] = []
         pages: dict[str, str] = {}  # url -> digest (deduplicated)
         max_steps = self.settings.agent_max_steps
+        goal = explore_goal(story_block)
 
         for step in range(max_steps):
             pages.setdefault(session.page.url, observation)
             phase.update(0.02 + 0.86 * (step / max_steps),
                          f"Agent: Schritt {step + 1}/{max_steps} · {session.page.url}")
             user = (
-                "GOAL: explore the application broadly to map its main "
-                "user-facing flows (navigation, search, forms, detail views).\n\n"
+                f"GOAL: {goal}\n\n"
                 f"ACTION LOG SO FAR:\n" + ("\n".join(action_log) or "(none)") + "\n\n"
                 f"CURRENT OBSERVATION:\n{observation}\n\n"
                 "Reply with the next action as a single JSON object."
@@ -150,11 +157,16 @@ class LLMAgent:
             parts.append(f"\n--- {url} ---\n{truncate(digest, 1200)}")
         return truncate("\n".join(parts), 6000)
 
-    def _synthesize(self, transcript: str) -> str:
+    def _synthesize(self, transcript: str, story_block: str | None = None) -> str:
+        if story_block:
+            system = SYNTHESIS_SYSTEM_STORY
+            user = synthesis_user_prompt_story(self.target.base_url, story_block, transcript)
+        else:
+            system = SYNTHESIS_SYSTEM
+            user = synthesis_user_prompt(self.target.base_url, transcript)
         messages: list[Message] = [
-            {"role": "system", "content": SYNTHESIS_SYSTEM},
-            {"role": "user", "content": synthesis_user_prompt(
-                self.target.base_url, transcript)},
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
         ]
         reply = self.provider.chat(messages)
         return extract_code_block(reply)
@@ -185,5 +197,5 @@ class LLMAgent:
 
 
 def generate(target: TargetApp, settings: Settings | None = None,
-             phase=None) -> GeneratedScript:
-    return LLMAgent(target, settings).generate(phase=phase)
+             phase=None, *, with_stories: bool = False) -> GeneratedScript:
+    return LLMAgent(target, settings).generate(phase=phase, with_stories=with_stories)

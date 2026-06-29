@@ -24,11 +24,12 @@ GOOD = "#2f8f5b"
 BAD = "#b3433b"
 # Calm, colourblind-friendly, distinct — no navy/orange.
 PIPELINE_COLORS = {
-    "crawler": "#3b6ea5",     # Skript_C — muted blue
-    "llm_agent": "#5a9e9f",   # Skript_L — teal
-    "hybrid": "#8a6fae",      # Skript_H — muted violet
+    "crawler": "#3b6ea5",          # Skript_C — muted blue
+    "llm_agent": "#5a9e9f",        # Skript_L — teal
+    "llm_agent_story": "#5a8f4b",  # Skript_S — green
+    "hybrid": "#8a6fae",           # Skript_H — muted violet
 }
-CHART_SEQUENCE = ["#3b6ea5", "#5a9e9f", "#8a6fae"]
+CHART_SEQUENCE = ["#3b6ea5", "#5a9e9f", "#5a8f4b", "#8a6fae"]
 
 _CSS = """
 <style>
@@ -109,7 +110,7 @@ def render_job_monitor(job, *, log_lines: int = 40) -> None:
 
 def fmt(v, digits: int = 3) -> str:
     if v is None:
-        return "—"
+        return "n/a"
     if isinstance(v, bool):
         return "ja" if v else "nein"
     if isinstance(v, float):

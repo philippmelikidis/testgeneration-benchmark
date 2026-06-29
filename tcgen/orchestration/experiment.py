@@ -183,6 +183,8 @@ class ExperimentRunner:
         ph = progress.phase(1, f"{pipeline.script_label}: Generierung {tag}")
         if pipeline is Pipeline.LLM_AGENT:
             return agent_generate(target, self.settings, phase=ph)
+        if pipeline is Pipeline.LLM_AGENT_STORY:
+            return agent_generate(target, self.settings, phase=ph, with_stories=True)
         if pipeline is Pipeline.HYBRID:
             if crawler_script is None:
                 raise RuntimeError("Hybrid requires a crawler script.")
@@ -208,10 +210,18 @@ class ExperimentRunner:
             ph.log("leeres Skript — Bewertung übersprungen")
             return JudgeScores()
         try:
-            story_block = (_story_block(target.user_stories)
-                           if pipeline is Pipeline.HYBRID else None)
+            # Story-aware judging for pipelines that RECEIVED the stories
+            # (Skript_S, Skript_H); intrinsic for the story-free ones (C, L).
+            story_aware = pipeline in (Pipeline.HYBRID, Pipeline.LLM_AGENT_STORY)
+            story_block = _story_block(target.user_stories) if story_aware else None
+            # Hallucination is not applicable to the deterministic crawler (it can
+            # only emit elements it actually found) -> n/a, not 0.
+            metrics = {"correctness", "appropriateness", "hallucination", "readability"}
+            if pipeline is Pipeline.CRAWLER:
+                metrics.discard("hallucination")
             return DeepEvalJudge(self.settings).judge(
-                script.code, target.base_url, story_block=story_block, phase=ph)
+                script.code, target.base_url, story_block=story_block,
+                metrics=metrics, phase=ph)
         except Exception as exc:  # noqa: BLE001
             ph.log(f"FEHLER Judge {label}: {exc}")
             log.exception("Judge failed for %s", label)

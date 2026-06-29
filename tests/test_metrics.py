@@ -45,7 +45,7 @@ def test_iso_uses_continuous_passrate_and_real_denominator():
     iso = map_to_iso(ex, jd, coverage_denominator=20)
     assert iso.functional_correctness == 0.85          # mean(0.8, 0.9) — continuous
     assert iso.functional_completeness == 0.5           # 10 / 20 (real denominator)
-    assert iso.functional_appropriateness == 0.7        # mean(0.6, 1-0.2)
+    assert iso.functional_appropriateness == 0.6        # = judge appropriateness (consistent)
 
 
 def test_iso_completeness_zero_when_nothing_exercised():

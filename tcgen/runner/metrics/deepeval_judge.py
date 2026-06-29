@@ -108,10 +108,16 @@ class DeepEvalJudge:
         self.provider = provider or get_judge_provider(self.settings)
 
     def judge(self, script_code: str, base_url: str, *,
-              story_block: str | None = None, phase=None) -> JudgeScores:
+              story_block: str | None = None, metrics: set[str] | None = None,
+              phase=None) -> JudgeScores:
         """Score a script. If ``story_block`` is given, grade against the user
         stories (story-aware, Methode 2); otherwise grade intrinsic quality and
-        app-grounding (Methode 1)."""
+        app-grounding (Methode 1).
+
+        ``metrics`` restricts which dimensions are scored; any omitted dimension
+        stays ``None`` (rendered as n/a) — used to skip metrics that are not
+        applicable to a pipeline (e.g. hallucination for the deterministic
+        crawler, which can only emit elements it actually found)."""
         from deepeval.metrics import GEval
         from deepeval.test_case import LLMTestCase, LLMTestCaseParams
 
@@ -134,8 +140,15 @@ class DeepEvalJudge:
 
         scores: dict[str, float | None] = {}
         reasons: dict[str, str] = {}
-        n = len(criteria_set)
-        for i, (key, criteria) in enumerate(criteria_set.items()):
+        items = [(k, c) for k, c in criteria_set.items()
+                 if metrics is None or k in metrics]
+        # Not-applicable metrics are explicitly recorded as n/a (not 0).
+        for k in criteria_set:
+            if metrics is not None and k not in metrics:
+                scores[k] = None
+                reasons[k] = "n/a (für diese Pipeline nicht anwendbar)"
+        n = max(len(items), 1)
+        for i, (key, criteria) in enumerate(items):
             phase.update(i / n, f"Judge: {key}")
             try:
                 metric = GEval(name=key, criteria=criteria,

@@ -51,24 +51,34 @@ def _register_overlay_handlers(page):
     for _factory in (
         lambda: page.get_by_role("button", name="dismiss cookie message"),
         lambda: page.get_by_role("button", name="Close Welcome Banner"),
+        lambda: page.locator(".close-dialog"),  # welcome dialog close (single match)
     ):
         try:
             locators.append(_factory())
         except Exception:
             pass
+
+    def _make_handler(loc):
+        def _handler(*_a):
+            try:
+                loc.first.click(timeout=1500)
+            except Exception:
+                pass  # handler must never raise, or it fails the test
+        return _handler
+
     for _loc in locators:
         try:
-            # no_wait_after=True: don't wait for the overlay to visually disappear
-            # after clicking. Without it Playwright re-fires the handler until the
-            # element is hidden, which creates a 10+ iteration loop on animated
-            # banners (e.g. Juice Shop cookie bar) and leaves page.url as None,
-            # breaking subsequent expect(page) assertions.
+            # no_wait_after=True: dismiss and continue immediately. Without it,
+            # Playwright loops waiting for the overlay to disappear (which it may
+            # not, if another modal sits on top), corrupting the action.
+            # times=1: dismiss once per test; banner won't reappear mid-test.
             page.add_locator_handler(
-                _loc,
-                lambda *a, loc=_loc: loc.first.click(timeout=2000),
-                no_wait_after=True,  # don't wait for element to disappear (avoids retry loop)
-                times=1,             # dismiss once per test; banner won't reappear mid-test
+                _loc, _make_handler(_loc),
+                no_wait_after=True,
+                times=1,
             )
+        except TypeError:
+            page.add_locator_handler(_loc, _make_handler(_loc))  # older Playwright
         except Exception:
             pass
 
@@ -104,8 +114,11 @@ class TestRunner:
         n_failed = first["n_failed"]
 
         # Which test functions passed -> execution-gated ("exercised") coverage.
+        # Strip the pytest-playwright parametrisation suffix, e.g.
+        # "test_x[chromium]" -> "test_x", so it matches the function names in the
+        # source (otherwise exercised coverage is always 0).
         passed_fns = {
-            nodeid.split("::")[-1]
+            nodeid.split("::")[-1].split("[")[0]
             for nodeid, outcome in first.get("outcomes", {}).items()
             if outcome == "passed"
         }

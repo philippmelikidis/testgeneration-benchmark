@@ -17,17 +17,21 @@ def _now() -> str:
 
 
 class Pipeline(str, Enum):
-    """The three generation strategies of the study."""
+    """The generation strategies of the study."""
 
-    CRAWLER = "crawler"        # Skript_C  (Methode 1, traditional)
-    LLM_AGENT = "llm_agent"    # Skript_L  (Methode 1, LLM-only)
-    HYBRID = "hybrid"          # Skript_H  (Methode 2, LLM refines Skript_C)
+    CRAWLER = "crawler"                  # Skript_C  (Methode 1, traditional, no story)
+    LLM_AGENT = "llm_agent"             # Skript_L  (Methode 1, LLM-only, no story)
+    LLM_AGENT_STORY = "llm_agent_story"  # Skript_S  (LLM agent WITH user story)
+    HYBRID = "hybrid"                   # Skript_H  (Methode 2, LLM refines Skript_C)
 
     @property
     def script_label(self) -> str:
-        return {"crawler": "Skript_C", "llm_agent": "Skript_L", "hybrid": "Skript_H"}[
-            self.value
-        ]
+        return {
+            "crawler": "Skript_C",
+            "llm_agent": "Skript_L",
+            "llm_agent_story": "Skript_S",
+            "hybrid": "Skript_H",
+        }[self.value]
 
 
 class GeneratedScript(BaseModel):

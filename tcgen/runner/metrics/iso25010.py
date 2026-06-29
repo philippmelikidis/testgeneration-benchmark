@@ -54,9 +54,12 @@ def map_to_iso(
     else:
         completeness = None
 
-    # --- Functional Appropriateness: on-task + grounded (low hallucination) ---
-    grounded = None if judge.hallucination is None else (1.0 - judge.hallucination)
-    appropriateness = _mean(judge.appropriateness, grounded)
+    # --- Functional Appropriateness: the judge's appropriateness score, used
+    # identically for every pipeline. Hallucination is reported as a SEPARATE
+    # metric (and is n/a for the crawler) rather than folded in here, so that a
+    # not-applicable hallucination value cannot change how appropriateness is
+    # computed for one pipeline versus another.
+    appropriateness = judge.appropriateness
 
     return Iso25010(
         functional_correctness=correctness,

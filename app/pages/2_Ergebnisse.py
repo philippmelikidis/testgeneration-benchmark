@@ -41,6 +41,21 @@ st.markdown(
     f"{record.created_at}"
 )
 
+# --- export (so the full result can be downloaded instead of copied) ------- #
+from tcgen.orchestration.report import record_to_markdown  # noqa: E402
+
+_md = record_to_markdown(record)
+ex1, ex2, _sp = st.columns([1, 1, 3])
+with ex1:
+    st.download_button("Export (Markdown)", data=_md,
+                       file_name=f"ergebnis_{record.id}.md", mime="text/markdown",
+                       help="Kompletter Bericht inkl. Tabelle, Judge-Begründungen, "
+                            "Fehlern und Skripten — zum Weitergeben.")
+with ex2:
+    st.download_button("Export (JSON)", data=record.model_dump_json(indent=2),
+                       file_name=f"ergebnis_{record.id}.json", mime="application/json",
+                       help="Roher Experiment-Datensatz (maschinenlesbar).")
+
 results = record.pipelines
 rows = [flatten_result(r) for r in results]
 labels = [r["script"] for r in rows]
@@ -83,7 +98,8 @@ for key, label, higher in METRIC_COLUMNS:
 df = pd.DataFrame(table).T
 df = df[labels] if all(c in df.columns for c in labels) else df
 st.dataframe(df, use_container_width=True)
-st.caption("↑ = höher ist besser, ↓ = niedriger ist besser. „—“ = nicht verfügbar. "
+st.caption("↑ = höher ist besser, ↓ = niedriger ist besser. „n/a“ = für diese "
+           "Pipeline nicht anwendbar (z. B. Hallucination beim Crawler). "
            "„± x“ = Standardabweichung über die Wiederholungen.")
 
 # --- anomalies ------------------------------------------------------------- #
