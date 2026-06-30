@@ -58,15 +58,9 @@ user_stories:
       - "Pflichtfelder E-Mail, Passwort und Passwort-Wiederholung sind vorhanden."
       - "Eine Sicherheitsfrage muss ausgewählt werden."
 
-  - id: "US-4"
-    title: "Cookie-/Willkommens-Banner schließen"
-    text: >
-      Als Besucher möchte ich den Willkommens-Dialog und das Cookie-Banner
-      schließen, damit ich ungehindert einkaufen kann.
-    acceptance_criteria:
-      - "Der Willkommens-Dialog lässt sich über 'Dismiss' schließen."
-      - "Das Cookie-Banner lässt sich über 'Me want it!' bestätigen."
-      - "Nach dem Schließen ist die Produktliste sichtbar."
+  # (US-4 „Cookie-/Willkommens-Banner schließen" entfernt: der gemeinsame
+  #  Test-Harness setzt den Dismiss-Status vorab, sodass die Banner gar nicht
+  #  erscheinen — die Story wäre damit strukturell nicht testbar.)
 
   - id: "US-5"
     title: "Anmelden"

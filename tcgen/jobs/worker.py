@@ -47,6 +47,7 @@ def run_job(job_id: str) -> int:
             domain_context=job.domain_context,
             user_story_ids=job.user_story_ids or None,
             repetitions=job.repetitions,
+            reuse_crawler=job.reuse_crawler,
             sink=sink,
         )
         job.result_id = record.id

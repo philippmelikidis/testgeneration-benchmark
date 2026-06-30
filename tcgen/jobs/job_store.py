@@ -32,6 +32,9 @@ class JobState(BaseModel):
     domain_context: str = ""
     user_story_ids: list[str] = Field(default_factory=list)
     repetitions: int = 1
+    # Reuse the most recent Skript_C for this app instead of re-running the
+    # (slow, deterministic) crawler.
+    reuse_crawler: bool = False
 
     status: JobStatus = "pending"
     percent: float = 0.0

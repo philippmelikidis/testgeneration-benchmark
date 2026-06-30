@@ -48,18 +48,26 @@ def locators_by_function(code: str) -> dict[str, set[str]]:
     return out
 
 
-def exercised_locator_count(code: str, passed_functions: set[str]) -> int:
-    """Distinct locators that appear in test functions that actually PASSED.
+def exercised_locator_set(code: str, passed_functions: set[str]) -> set[str]:
+    """Distinct locator expressions that appear in test functions that PASSED.
 
-    This is the execution-gated coverage proxy: locators in failing tests
-    (including hallucinated ones, which cause the failure) do not count, so the
-    metric reflects elements the suite genuinely exercised.
+    The execution-gated coverage *set* (the count proxy builds on this): locators
+    in failing tests (including hallucinated ones, which cause the failure) are
+    excluded, so it reflects elements the suite genuinely exercised. Returning the
+    set — not just its size — lets the orchestrator union exercised locators
+    across pipelines to form a pipeline-neutral completeness denominator.
     """
     by_fn = locators_by_function(code)
     used: set[str] = set()
     for fn in passed_functions:
         used |= by_fn.get(fn, set())
-    return len(used)
+    return used
+
+
+def exercised_locator_count(code: str, passed_functions: set[str]) -> int:
+    """Number of distinct locators exercised by passing tests (see
+    :func:`exercised_locator_set`)."""
+    return len(exercised_locator_set(code, passed_functions))
 
 
 def assertion_count(code: str) -> int:

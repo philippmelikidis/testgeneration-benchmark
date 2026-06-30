@@ -6,6 +6,7 @@ reused by the refiner/experiment for the story-aware Skript_H path."""
 from __future__ import annotations
 
 import logging
+import re
 import time
 
 from config.settings import Settings, TargetApp, UserStory, get_settings
@@ -13,6 +14,7 @@ from tcgen.llm import LLMProvider, Message, get_provider
 from tcgen.orchestration.models import GeneratedScript, Pipeline
 from tcgen.progress import NullPhase, Phase
 from tcgen.pipelines.llm_agent.browser_tools import BrowserSession
+from tcgen.pipelines.llm_agent.playwright_mcp import PlaywrightMcpSession
 from tcgen.pipelines.llm_agent.prompts import (
     EXPLORE_SYSTEM,
     REPAIR_SYSTEM,
@@ -26,6 +28,7 @@ from tcgen.pipelines.llm_agent.prompts import (
 from tcgen.util import (
     extract_code_block,
     extract_json_object,
+    postprocess_playwright_code,
     truncate,
     validate_playwright_code,
 )
@@ -67,18 +70,18 @@ class LLMAgent:
         story_block = _story_block(self.target.user_stories) if with_stories else None
         mode = "mit User-Story" if with_stories else "ohne User-Story"
         phase.update(0.02, f"Agent startet Exploration (Crawler-Aufgabe, {mode})")
-        with BrowserSession(
-            self.target.base_url,
-            headless=self.settings.headless,
-            settle_timeout_ms=self.settings.settle_timeout_ms,
-            settle_pause_ms=self.settings.settle_pause_ms,
-        ) as session:
+        session, backend = self._open_session(phase)
+        try:
             observation = session.navigate(self.target.entry_paths[0])
             action_log, pages = self._explore(session, observation, phase, story_block)
+        finally:
+            session.__exit__(None, None, None)
         phase.update(0.9, "Synthese der Testsuite aus Beobachtungen")
         transcript = self._build_transcript(action_log, pages)
         code = self._synthesize(transcript, story_block)
         code = self._maybe_repair(code, phase)
+        code = self._absolutise_gotos(code)
+        code = postprocess_playwright_code(code)
         phase.update(1.0, f"{pipeline.script_label} erzeugt ({len(code.splitlines())} Zeilen)")
         return GeneratedScript(
             pipeline=pipeline,
@@ -92,16 +95,55 @@ class LLMAgent:
                 "agent_steps": len(action_log),
                 "pages_observed": len(pages),
                 "user_story_used": with_stories,
+                "browser_backend": backend,
             },
         )
 
     # ------------------------------------------------------------------ #
-    def _explore(self, session: BrowserSession, observation, phase: Phase,
+    def _open_session(self, phase: Phase):
+        """Open the agent's browser backend.
+
+        Default is the official Playwright MCP server. If it cannot be launched
+        (e.g. Node/npx missing), we log loudly and fall back to the in-process
+        backend so a run still completes — the fallback is recorded in the script
+        meta (``browser_backend``) so the methodology stays transparent."""
+        backend = self.settings.agent_browser_backend
+        if backend == "playwright_mcp":
+            import shlex
+            try:
+                session = PlaywrightMcpSession(
+                    self.target.base_url,
+                    headless=self.settings.headless,
+                    settle_timeout_ms=self.settings.settle_timeout_ms,
+                    settle_pause_ms=self.settings.settle_pause_ms,
+                    command=self.settings.playwright_mcp_command,
+                    args=shlex.split(self.settings.playwright_mcp_args),
+                    start_timeout_s=self.settings.playwright_mcp_start_timeout_s,
+                )
+                session.__enter__()
+                phase.log("Agent-Browser-Backend: Playwright MCP (@playwright/mcp)")
+                return session, "playwright_mcp"
+            except Exception as exc:  # noqa: BLE001
+                phase.log(f"Playwright MCP nicht verfügbar ({exc}) — Fallback auf "
+                          f"In-Process-Backend")
+                log.warning("Playwright MCP unavailable, falling back: %s", exc)
+        session = BrowserSession(
+            self.target.base_url,
+            headless=self.settings.headless,
+            settle_timeout_ms=self.settings.settle_timeout_ms,
+            settle_pause_ms=self.settings.settle_pause_ms,
+        )
+        session.__enter__()
+        phase.log("Agent-Browser-Backend: In-Process (Playwright sync)")
+        return session, "inprocess"
+
+    # ------------------------------------------------------------------ #
+    def _explore(self, session, observation, phase: Phase,
                  story_block: str | None = None):
         action_log: list[str] = []
         pages: dict[str, str] = {}  # url -> digest (deduplicated)
         max_steps = self.settings.agent_max_steps
-        goal = explore_goal(story_block)
+        goal = explore_goal(story_block, self.target.base_url)
 
         for step in range(max_steps):
             pages.setdefault(session.page.url, observation)
@@ -170,6 +212,20 @@ class LLMAgent:
         ]
         reply = self.provider.chat(messages)
         return extract_code_block(reply)
+
+    _GOTO_REL_RE = re.compile(r'(\.goto\(\s*["\'])(/[^"\']*)(["\'])')
+
+    def _absolutise_gotos(self, code: str) -> str:
+        """Rewrite relative ``page.goto("/x")`` to an absolute URL on the target.
+
+        Small models sometimes emit relative paths, which Playwright rejects with
+        'Cannot navigate to invalid URL' (no base_url is configured for the bare
+        `page` fixture). Prefixing the target base keeps such tests at least
+        runnable (an invented route then simply fails its assertion instead of
+        erroring out the whole module)."""
+        base = self.target.base_url.rstrip("/")
+        return self._GOTO_REL_RE.sub(
+            lambda m: f"{m.group(1)}{base}{m.group(2)}{m.group(3)}", code)
 
     def _maybe_repair(self, code: str, phase: Phase) -> str:
         """One validate+repair round so Skript_L is at least runnable Python."""

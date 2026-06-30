@@ -47,10 +47,17 @@ with col_b:
     chosen = st.multiselect(
         "Pipelines",
         list(pipeline_labels.keys()),
-        default=["Crawler — Skript_C", "LLM-Agent — Skript_L (ohne Story)"],
+        default=list(pipeline_labels.keys()),
         help="Skript_S = LLM-Agent, der die App erkundet UND die User-Stories bekommt.",
     )
-    include_hybrid = st.checkbox("Hybrid — Skript_H (Methode 2) zuschalten", value=False)
+    include_hybrid = st.checkbox("Hybrid — Skript_H (Methode 2) zuschalten", value=True)
+    reuse_crawler = st.checkbox(
+        "Crawler nicht neu laufen lassen (letzten Skript_C wiederverwenden)",
+        value=True,
+        help="Überspringt die langsame Crawler-Exploration und nutzt den zuletzt "
+             "für diese App erzeugten Skript_C aus results/. Praktisch, wenn die "
+             "Baseline schon steht und nur die LLM-Pipelines neu laufen sollen.",
+    )
     evaluate = st.checkbox("Bewerten (Runner + DeepEval)", value=True,
                            help="Aus: nur Generierung, keine Ausführung/Bewertung.")
 
@@ -73,7 +80,7 @@ user_story_ids = [story_options[s] for s in chosen_stories]
 col_r, col_d = st.columns([1, 2])
 with col_r:
     repetitions = st.number_input(
-        "Wiederholungen (LLM + Judge)", min_value=1, max_value=10, value=3, step=1,
+        "Wiederholungen (LLM + Judge)", min_value=1, max_value=100, value=1, step=1,
         help="LLM-Stufen und Judge werden N× ausgeführt und zu Mittelwert ± Std "
              "kumuliert. Der Crawler wird einmal generiert.",
     )
@@ -103,6 +110,7 @@ if st.button("Lauf starten", type="primary", disabled=not pipelines):
         app_key, pipelines,
         include_hybrid=include_hybrid, evaluate=evaluate, domain_context=domain_context,
         user_story_ids=user_story_ids, repetitions=int(repetitions),
+        reuse_crawler=reuse_crawler,
     )
     st.session_state["active_job_id"] = job_id
     st.success(f"Job gestartet: `{job_id}`")

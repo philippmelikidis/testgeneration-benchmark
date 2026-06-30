@@ -23,7 +23,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-c1, c2, c3 = st.columns(3)
+c1, c2, c3, c4 = st.columns(4)
 with c1:
     st.markdown("### Skript_C — Crawler")
     st.caption("Methode 1, traditionell")
@@ -36,16 +36,25 @@ with c2:
     st.markdown("### Skript_L — LLM-Agent")
     st.caption("Methode 1, LLM-only")
     st.write(
-        "LLM-Agent bekommt dieselbe Aufgabe wie der Crawler: die App über ein "
-        "JSON-Aktionsprotokoll autonom erkunden und eine Testsuite erzeugen. "
-        "User-Stories dienen als zusätzlicher Kontext zur Priorisierung."
+        "LLM-Agent bekommt dieselbe Aufgabe wie der Crawler: die App autonom über "
+        "den Playwright-MCP-Server erkunden und eine Testsuite erzeugen. "
+        "**Ohne** User-Story."
     )
 with c3:
-    st.markdown("### Skript_H — Hybrid")
-    st.caption("Methode 2, Aufsatz")
+    st.markdown("### Skript_S — LLM-Agent + Story")
+    st.caption("LLM-only, story-bewusst")
     st.write(
-        "LLM-Refiner nimmt Skript_C als Eingabe und verbessert es entlang dreier "
-        "Achsen: robuste Locator, fehlende Assertions, Lesbarkeit. Drei-Wege-Vergleich."
+        "Wie Skript_L, aber der Agent bekommt zusätzlich die User-Stories und "
+        "erkundet die App, um genau diese Stories zu testen. Isoliert (vs. L) den "
+        "Effekt der Anforderungen beim LLM-Agenten."
+    )
+with c4:
+    st.markdown("### Skript_H — Hybrid")
+    st.caption("Methode 2, geerdet")
+    st.write(
+        "LLM bekommt die Crawler-Map (entdeckte Routen + echte, verifizierte "
+        "Locator) **plus** die User-Stories und schreibt damit grounded eine "
+        "Story-Testsuite — nur reale Elemente, keine erfundenen Selektoren."
     )
 
 st.markdown("## Vorgehen")

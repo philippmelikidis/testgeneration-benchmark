@@ -68,6 +68,12 @@ class ExecutionResult(BaseModel):
     # Distinct locators in tests that actually PASSED (execution-gated coverage;
     # feeds ISO completeness).
     exercised_coverage: int = 0
+    # The actual exercised locator expressions (not just the count). The
+    # orchestrator unions these across pipelines to build a pipeline-neutral
+    # completeness denominator, instead of relying solely on the crawler's
+    # discovered surface (which would bias completeness toward what the crawler
+    # happens to see). Not persisted in the flattened per-run rows.
+    exercised_locators: list[str] = Field(default_factory=list)
     # Flakiness: 0.0 = perfectly stable across repeated runs, 1.0 = fully unstable.
     flakiness: float = 0.0
     # Message of the first failing/erroring test (from the pytest report) so the

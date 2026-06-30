@@ -99,6 +99,9 @@ def mean_execution(execs: list[ExecutionResult]) -> ExecutionResult:
     def avg(attr: str) -> float:
         return _avg([getattr(e, attr) for e in execs])
 
+    union_locators: set[str] = set()
+    for e in execs:
+        union_locators |= set(e.exercised_locators)
     return ExecutionResult(
         executed=any(e.executed for e in execs),
         passed=sum(1 for e in execs if e.passed) * 2 >= len(execs),  # majority green
@@ -109,6 +112,9 @@ def mean_execution(execs: list[ExecutionResult]) -> ExecutionResult:
         ssr=round(avg("ssr"), 4),
         element_coverage=round(avg("element_coverage")),
         exercised_coverage=round(avg("exercised_coverage")),
+        # Union across reps so the cross-pipeline completeness denominator sees
+        # every element any rep genuinely exercised.
+        exercised_locators=sorted(union_locators),
         flakiness=round(avg("flakiness"), 4),
         first_error=next((e.first_error for e in execs if e.first_error), None),
         stdout=execs[0].stdout,

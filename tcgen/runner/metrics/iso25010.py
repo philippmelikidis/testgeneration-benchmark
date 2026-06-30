@@ -12,9 +12,11 @@ Design notes (addressing known metric pitfalls):
 - **Completeness uses *exercised* coverage** (distinct locators in PASSING tests),
   not the static locator count, so hallucinated locators in failing tests do not
   inflate it.
-- The completeness denominator is the **number of interactable elements the
-  crawler actually discovered on the app** (passed in by the orchestrator), not a
-  magic constant.
+- The completeness denominator is the **union of distinct locators that any
+  pipeline genuinely exercised** (passing tests), passed in by the orchestrator —
+  a pipeline-neutral "reachable & verified" surface, not a magic constant and not
+  defined solely by the crawler. The crawler's discovered-element count is only a
+  last-resort fallback when nothing was exercised anywhere.
 - **Executability is continuous** (the pass rate / SSR feeds correctness), not a
   binary 0/1 flag — a suite where 9/10 tests pass scores above one where 1/10
   passes.

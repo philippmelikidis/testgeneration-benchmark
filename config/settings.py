@@ -61,15 +61,40 @@ class Settings(BaseSettings):
 
     # --- generation behaviour ---
     llm_temperature: float = 0.1
+    # Per-request timeout (s) for LLM calls. Without it a stalled cloud request
+    # hangs the agent loop indefinitely (each exploration step is one call).
+    llm_request_timeout_s: float = 120.0
     # Generous so thinking models (e.g. glm-5.1, gpt-oss) have room for the code
     # AFTER their reasoning tokens; too small truncates the script to nothing.
     llm_max_tokens: int = 8192
     agent_max_steps: int = 25
     agent_repair: bool = True            # one validate+repair round on Skript_L
+    # --- agent browser backend ---
+    # "playwright_mcp": explore via the official Microsoft Playwright MCP server
+    # (@playwright/mcp, requires Node 18+/npx); "inprocess": the bundled
+    # in-process Playwright harness. MCP is the default; it falls back to
+    # in-process (recorded in script meta) if the server cannot be launched.
+    agent_browser_backend: Literal["playwright_mcp", "inprocess"] = "playwright_mcp"
+    playwright_mcp_command: str = "npx"
+    playwright_mcp_args: str = "@playwright/mcp@latest --headless --isolated --browser chromium"
+    playwright_mcp_start_timeout_s: float = 90.0
     crawler_max_states: int = 40
     crawler_max_depth: int = 4
-    crawler_max_actions_per_state: int = 12
+    # Generous per-state interaction budget: the crawler is the COMPLETENESS
+    # baseline, so prefer covering the reachable surface over speed.
+    crawler_max_actions_per_state: int = 25
     crawler_max_scenarios: int = 12
+    # Per-action timeout during exploration (ms). This bounds how long a click/
+    # fill waits for an element to become actionable. On a local SPA real
+    # elements respond in well under this; a longer value only wastes time
+    # waiting on non-actionable (e.g. decorative cursor:pointer) elements, which
+    # is what makes the crawl *look* hung. Completeness comes from the broadened
+    # element harvest, not from waiting longer on dead elements.
+    crawler_action_timeout_ms: int = 4000
+    # Wall-clock cap (s) for the whole exploration; 0 = no cap (default). The
+    # crawler is allowed to run as long as it needs for full coverage; set a
+    # positive value only if you want to bound run time.
+    crawler_time_budget_s: int = 0
 
     # --- execution ---
     headless: bool = True
@@ -81,10 +106,11 @@ class Settings(BaseSettings):
     # background and never truly idles, so keep this small) + a short paint pause.
     settle_timeout_ms: int = 1500
     settle_pause_ms: int = 400
-    # Per-action timeout the generated test harness applies. High enough that
-    # slow SPA renders/animations don't time out spuriously, but below the 30s
-    # Playwright default so genuinely broken scripts still fail in reasonable time.
-    test_action_timeout_ms: int = 15000
+    # Per-action timeout the generated test harness applies. Below the 30s
+    # Playwright default so broken/unstable tests fail fast (they otherwise burn
+    # this much × retries × flakiness_runs). The harness also disables CSS
+    # animations, so elements settle quickly and this can stay modest.
+    test_action_timeout_ms: int = 8000
 
     @property
     def generation_model(self) -> str:

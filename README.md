@@ -11,21 +11,23 @@ User-Stories steuern Methode 2 und dienen als gemeinsamer Bewertungsmaßstab
 | Crawler       | `Skript_C` | traditionell | autonomer Playwright-Crawler, Zustandsgraph → pytest-Skript; **ohne** User-Story |
 | LLM-Agent     | `Skript_L` | LLM-only     | gleiche Aufgabe wie der Crawler (App autonom erkunden, Testsuite erzeugen); **ohne** User-Story |
 | LLM-Agent+Story | `Skript_S` | LLM-only   | LLM-Agent erkundet die App **und** bekommt die User-Stories → testet sie direkt |
-| Hybrid        | `Skript_H` | Aufsatz      | LLM verfeinert `Skript_C` **mit** User-Story (+ optionalem Fachkontext): Locator, Assertions, Lesbarkeit |
+| Hybrid        | `Skript_H` | Aufsatz      | LLM bekommt die **Crawler-Map** (entdeckte Routen + echte, verifizierte Locator aus `Skript_C`) **plus** User-Story (+ opt. Fachkontext) und schreibt damit *grounded* eine Story-Testsuite — nur reale Elemente, keine erfundenen Selektoren |
 
 Ablation: `Skript_L` vs. `Skript_S` isoliert den Effekt der Anforderungen beim
-LLM-Agenten; `Skript_S` vs. `Skript_H` vergleicht „Agent von Grund auf mit Story"
-gegen „Crawler-Output mit Story veredeln". Bewertung: C/L intrinsisch (sahen keine
-Stories), S/H story-bewusst.
+LLM-Agenten; `Skript_S` vs. `Skript_H` vergleicht „LLM erkundet selbst mit Story"
+gegen „LLM nutzt die geerdete Crawler-Map mit Story". Bewertung: C/L intrinsisch
+(sahen keine Stories), S/H story-bewusst.
 
 **Methode 1 — fairer A/B ohne Anforderungen:** Crawler und LLM-Agent bekommen
 das exakt gleiche, anforderungsfreie Aufgabengebiet (App autonom erkunden und
 eine Testsuite erzeugen) — **keiner** von beiden sieht die User-Stories. So misst
 der Vergleich rein die Generierungsmethode auf identischer Aufgabe.
 
-**Methode 2 — Anforderungswissen kommt hier rein:** Erst der Hybrid-Refiner
-erhält die User-Stories (und optional fachlichen Zusatzkontext) und verbessert
-damit `Skript_C`. Hypothese: `Skript_H` schlägt `Skript_C` und `Skript_L`.
+**Methode 2 — Anforderungswissen kommt hier rein:** Der Hybrid erhält die
+User-Stories (und optional Fachkontext) **und** die Crawler-Map (entdeckte Routen
++ echte, verifizierte Locator aus `Skript_C`) und schreibt damit *grounded* eine
+Story-Testsuite — er nutzt nur reale, vom Crawler bestätigte Elemente statt
+erfundener Selektoren. Hypothese: `Skript_H` schlägt `Skript_C` und `Skript_L`.
 
 > Bewertung: Die gemeinsame Metrik-Suite (inkl. DeepEval-Judge) nutzt die
 > User-Stories als **einheitlichen Maßstab für alle drei** Artefakte — auch für
@@ -57,6 +59,18 @@ Die Provider-Abstraktion ist text-in/text-out. Der Agent nutzt ein portables
 JSON-Aktionsprotokoll statt vendor-spezifischem Function-Calling, damit kleine
 lokale Ollama-Modelle genauso funktionieren wie gehostete.
 
+**Agent-Browser-Backend.** Der LLM-Agent exploriert standardmäßig über den
+**offiziellen Playwright-MCP-Server** (`@playwright/mcp`, Microsoft): navigieren/
+klicken/tippen über die Standard-MCP-Tools, Beobachtung als
+Accessibility-Snapshot (ARIA-Baum mit stabilen `[ref=eNN]`-Referenzen) — ein
+stärkeres, realistischeres Grounding als ein selbstgebauter DOM-Harvest. Das
+portable JSON-Aktionsprotokoll bleibt erhalten (kein natives Function-Calling
+nötig); die Aktionen werden nur auf MCP-Tools übersetzt. Lässt sich der Server
+nicht starten (kein Node/npx), fällt der Agent automatisch auf das
+In-Process-Playwright-Backend zurück; das tatsächlich genutzte Backend steht in
+`script.meta["browser_backend"]`. Umschaltbar über `TCGEN_AGENT_BROWSER_BACKEND`
+(`playwright_mcp` | `inprocess`).
+
 ## Setup
 
 ### 1. Python-Umgebung
@@ -66,6 +80,14 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 playwright install chromium
 ```
+
+**Node.js 18+ (für das Agent-MCP-Backend).** Der LLM-Agent nutzt standardmäßig
+den offiziellen Playwright-MCP-Server, der per `npx @playwright/mcp@latest`
+gestartet wird — dafür muss Node.js 18+ (`node`, `npx`) auf dem PATH liegen. Beim
+ersten Lauf lädt `npx` das Paket einmalig nach (daher das großzügige Start-
+Timeout `TCGEN_PLAYWRIGHT_MCP_START_TIMEOUT_S`). Fehlt Node, fällt der Agent auf
+das In-Process-Backend zurück (`TCGEN_AGENT_BROWSER_BACKEND=inprocess` erzwingt
+das explizit).
 
 ### 2. LLM-Provider
 
@@ -190,7 +212,16 @@ einstellbar (networkidle gedeckelt, da SPAs wie Juice Shop im Hintergrund pollen
 
 - **Crawler:** der Serializer nutzt präzise CSS/nth-Selektoren des tatsächlich
   erkundeten Elements (statt `locator(tag).first`), damit `Skript_C` exakt die
-  Elemente trifft, die der Crawler angefasst hat.
+  Elemente trifft, die der Crawler angefasst hat. Der Crawler **sendet
+  Suchfelder ab** (Enter nach dem Tippen), damit Ergebnis-/Detail-/Warenkorb-
+  Flows überhaupt erreicht werden, und erfasst neben semantischen Tags auch
+  **generische SPA-Klickelemente** (ARIA-Rollen, `tabindex`, `cursor:pointer` —
+  z. B. Angular-Material-Produktkarten), die ein reiner `a/button/input`-Harvest
+  übersieht. Der Crawler ist die **Vollständigkeits-Baseline**, daher zählt
+  Abdeckung vor Tempo: das Wall-Clock-Budget (`TCGEN_CRAWLER_TIME_BUDGET_S`) ist
+  **standardmäßig aus (0)**, die Timeouts sind großzügig, damit kein langsam-aber-
+  gültiges Element übersprungen wird. Setze ein positives Budget nur, wenn du die
+  Laufzeit bewusst deckeln willst.
 - **LLM-Agent:** nach der Synthese eine Validierungs-Runde (`compile` + Lint auf
   fehlende `page.`-Präfixe, Explorations-Reste wie `e1`, fehlender Import); bei
   Befund eine einzige Reparatur-Runde (`TCGEN_AGENT_REPAIR`). Macht `Skript_L`
@@ -233,9 +264,13 @@ Hallucination, Readability — je [0, 1].
 **ISO/IEC 25010 Functional Suitability** (Mapping gemäß SLR §9):
 - Functional Correctness ← mean(Judge-Correctness, Pass-Rate) — Pass-Rate
   **kontinuierlich**, kein binäres „ausführbar".
-- Functional Completeness ← genutzte Element-Coverage ÷ **vom Crawler entdeckte
-  Elementanzahl** (echter, app-spezifischer Nenner statt Magic-Konstante; pro
-  Experiment einheitlich für alle Pipelines).
+- Functional Completeness ← genutzte Element-Coverage ÷ **Union der von ALLEN
+  Pipelines real ausgeführten Locator** (pipeline-neutraler „reachable &
+  verified"-Nenner, pro Experiment einheitlich). Damit definiert **nicht mehr der
+  Crawler allein** die Bezugsoberfläche: ein Element, das eine LLM-Pipeline
+  erreicht, der Crawler aber verpasst, zählt mit — der frühere Crawler-Bias im
+  Nenner entfällt. Nur falls nirgends etwas ausgeführt wurde, dient die
+  Crawler-Entdeckungszahl als Fallback.
 - Functional Appropriateness ← Judge-Appropriateness (für alle Pipelines gleich).
   Hallucination ist eine **eigenständige** Metrik (nicht in ISO eingerechnet) und
   beim Crawler **n/a** — strukturell nicht anwendbar, da er nur real erkundete
@@ -254,8 +289,10 @@ Dadurch wird ein echter Crawler nicht mehr fälschlich als „100% Hallucination
 gewertet, nur weil er reale, aber nicht-in-Stories-stehende Elemente testet.
 Folge: Judge-Zahlen sind je Methode fair, aber zwischen Methode 1 und 2 nur
 eingeschränkt direkt vergleichbar — beim Reporten so benennen. Der
-Completeness-Nenner bleibt ein Threat-to-Validity (Crawler-Sichtbarkeit begrenzt
-die „entdeckte" Oberfläche).
+Completeness-Nenner ist seit der Entkopplung die Union der real ausgeführten
+Locator aller Pipelines; der Restbias liegt jetzt darin, dass nur *bestandene*
+Tests zählen (eine Pipeline kann eine Oberfläche erreichen, aber durch einen
+fehlschlagenden Test nicht „verifizieren") — beim Reporten erwähnen.
 
 ## Tests
 

@@ -23,8 +23,19 @@ Respond with EXACTLY ONE JSON object and nothing else, in this shape:
 Rules:
 - Use the element refs (e1, e2, ...) shown in the OBSERVATION to target clicks
   and fills. Never invent a ref that was not listed.
-- Aim for broad coverage of the application's main flows: navigation, search,
+- STAY ON THE TARGET APPLICATION. You were started on the target's base URL
+  (shown in the GOAL). Only navigate to paths/URLs on that SAME origin (relative
+  paths like "/#/search" are best). NEVER navigate to external sites such as
+  google.com, wikipedia.org, example.com or any search engine — those are not the
+  system under test and off-origin navigation will be rejected.
+- Aim for broad coverage of the target's main flows: navigation, search,
   forms, and detail views.
+- DON'T REPEAT YOURSELF: never issue the same navigate twice. If the observation
+  is unchanged after an action, do NOT navigate again — instead CLICK one of the
+  listed element refs to go deeper (open a product, a menu, a form). Prefer
+  clicking/filling refs over navigating; that is how you discover real elements.
+- Actually interact: open a detail view, fill the search box and submit, open the
+  account/login forms — so the synthesis step has real elements to test.
 - Call "finish" once you have seen enough distinct flows to write a useful suite.
 - Do not attempt logout, payment confirmation, or destructive actions.
 """
@@ -44,10 +55,20 @@ Hard requirements:
 - Use ONLY elements and texts you actually observed during exploration (listed
   below). Do NOT invent selectors, ids, routes, or button labels. If unsure,
   prefer get_by_role / get_by_text with text you saw.
+- NEVER invent CSS class selectors (e.g. `.product-card`, `.product-grid`,
+  `.price`) or framework component tags (e.g. `app-product-details`). If you did
+  not observe a concrete element, do not assert on it. Prefer get_by_role/
+  get_by_label/get_by_placeholder/get_by_text with the exact texts you saw.
 - Prefer robust, user-facing locators: get_by_role, get_by_label,
   get_by_placeholder, get_by_text. Avoid brittle nth-child CSS chains.
 - Use web-first assertions (expect) for every flow; assert something meaningful.
-  Do NOT use manual sleeps.
+  Do NOT use manual sleeps. Do NOT assert exact URLs with `to_have_url("...")`
+  (SPA hash routes vary) — if you check the URL, use a substring/regex. For a
+  generic "page loaded" check use `expect(page.locator("body")).to_be_attached()`,
+  NOT `.to_be_visible()` (the body can read as hidden behind overlays).
+- A locator may match MULTIPLE elements (product cards etc.). Never click or
+  `expect(...).to_be_visible()` a multi-match locator (strict-mode error) — use
+  `.first` or `expect(loc).to_have_count(...)`.
 - A shared test harness already runs automatically: it bounds action timeouts
   and dismisses the welcome dialog / cookie banner after each navigation, so you
   do NOT need to handle those overlays yourself — just navigate and act.
@@ -111,17 +132,28 @@ Hard requirements:
 - Encode each user story's acceptance criteria as `expect(...)` assertions.
 - Use ONLY elements/texts you actually observed; do NOT invent selectors, ids,
   routes, or labels. Prefer get_by_role/label/placeholder/text.
+- NEVER invent CSS class selectors (e.g. `.product-card`, `.price`) or component
+  tags (`app-*`). If a criterion cannot be grounded in something you observed,
+  assert it conservatively (route reachable, `expect(page.locator("body"))
+  .to_be_attached()`) instead of inventing a selector.
+- Do NOT use exact `to_have_url("...")` (SPA hash routes vary); use substring/
+  regex if you check the URL at all. Avoid `body.to_be_visible()`.
+- A locator may match MULTIPLE elements (product cards etc.). Never click or
+  `expect(...).to_be_visible()` a multi-match locator (strict-mode error) — use
+  `.first` or `expect(loc).to_have_count(...)`.
 - A shared harness already dismisses welcome/cookie overlays and bounds timeouts.
 - Output ONLY the Python code in a single ```python fenced block.
 """
 
 
-def explore_goal(story_block: str | None) -> str:
+def explore_goal(story_block: str | None, base_url: str = "") -> str:
+    prefix = (f"TARGET BASE URL: {base_url} — stay on this application only; do "
+              f"NOT navigate to external sites.\n" if base_url else "")
     if story_block:
-        return ("explore the application so you can test these USER STORIES, and "
-                "also cover the main flows:\n" + story_block)
-    return ("explore the application broadly to map its main user-facing flows "
-            "(navigation, search, forms, detail views).")
+        return (prefix + "explore the application so you can test these USER "
+                "STORIES, and also cover the main flows:\n" + story_block)
+    return (prefix + "explore the application broadly to map its main user-facing "
+            "flows (navigation, search, forms, detail views).")
 
 
 def synthesis_user_prompt_story(base_url: str, story_block: str, transcript: str) -> str:

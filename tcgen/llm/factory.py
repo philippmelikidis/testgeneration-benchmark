@@ -13,7 +13,9 @@ def _build(settings: Settings, model: str) -> LLMProvider:
 
         return OllamaProvider(model, base_url=settings.ollama_base_url,
                               api_key=settings.ollama_api_key,
-                              think=settings.ollama_think, **common)
+                              think=settings.ollama_think,
+                              request_timeout_s=settings.llm_request_timeout_s,
+                              **common)
     if settings.llm_provider == "openai":
         from tcgen.llm.openai_provider import OpenAIProvider
 

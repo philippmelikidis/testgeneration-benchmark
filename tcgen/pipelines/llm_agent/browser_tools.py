@@ -9,7 +9,7 @@ model's own locators).
 
 from __future__ import annotations
 
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 from tcgen.pipelines.crawler.state import (
     HARVEST_JS,
@@ -56,12 +56,25 @@ class BrowserSession:
     # ------------------------------------------------------------------ #
     # tools
     # ------------------------------------------------------------------ #
+    @staticmethod
+    def _origin(url: str) -> str:
+        p = urlparse(url)
+        return f"{p.scheme}://{p.netloc}"
+
     def navigate(self, url: str) -> str:
         target = urljoin(self.base_url + "/", url.lstrip("/")) if not url.startswith("http") else url
+        note = ""
+        # Keep the agent on the system under test: redirect off-origin
+        # navigations (e.g. google.com) back to the target app.
+        if self._origin(target) != self._origin(self.base_url):
+            note = (f"NOTE: '{url}' is outside the target application "
+                    f"({self._origin(self.base_url)}). Navigation was kept on the "
+                    f"target — only explore the target app.\n")
+            target = self.base_url
         self.page.goto(target)
         self._settle()
         dismiss_overlays(self.page)
-        return self.observe()
+        return note + self.observe()
 
     def click(self, ref: str) -> str:
         el = self._lookup(ref)

@@ -43,9 +43,29 @@ HARVEST_JS = r"""
     return parts.join(' > ');
   };
   const out = [];
-  const sels = 'a[href], button, [role="button"], input, select, textarea, [onclick]';
+  // Semantically interactive elements (links, buttons, form fields) PLUS
+  // generic clickable elements common in SPAs (ARIA roles, tabindex). Framework
+  // widgets such as Angular Material product cards are <div>/<mat-card> with a
+  // click handler and no semantic tag, so a second, style-based pass below
+  // (cursor:pointer) catches them without hard-coding any app-specific selector.
+  const sels = [
+    'a[href]', 'button', 'input', 'select', 'textarea', '[onclick]',
+    '[role="button"]', '[role="link"]', '[role="menuitem"]', '[role="tab"]',
+    '[role="option"]', '[role="checkbox"]', '[role="radio"]', '[tabindex]',
+  ].join(', ');
+  const nodeSet = new Set(document.querySelectorAll(sels));
+  // Style-based pass: generic containers the browser renders as clickable.
+  for (const el of document.querySelectorAll(
+        'div, span, li, mat-card, article, section')) {
+    if (nodeSet.has(el)) continue;
+    const cs = window.getComputedStyle(el);
+    if (cs.cursor !== 'pointer') continue;
+    const t = (el.innerText || '').trim();
+    if (!t || t.length > 80) continue;   // skip empty/huge wrappers
+    nodeSet.add(el);
+  }
   const seen = new Set();
-  const nodes = document.querySelectorAll(sels);
+  const nodes = Array.from(nodeSet);
   for (const el of nodes) {
     const rect = el.getBoundingClientRect();
     const style = window.getComputedStyle(el);
@@ -106,6 +126,29 @@ class ElementDescriptor:
     @property
     def is_submit(self) -> bool:
         return self.tag == "button" or (self.tag == "input" and self.type in ("submit", "button"))
+
+    @property
+    def is_clickable(self) -> bool:
+        """Whether a click is a sensible interaction for this element.
+
+        Covers semantic controls (buttons, links, ARIA button/link/menuitem/tab/
+        option/checkbox/radio) and the generic clickable containers harvested via
+        the cursor:pointer pass (SPA cards/tiles). Form text inputs and ``select``
+        are excluded — they are handled as fills, not clicks."""
+        if self.is_submit or self.tag == "a":
+            return True
+        if self.role in ("button", "link", "menuitem", "tab", "option",
+                         "checkbox", "radio", "switch", "menuitemcheckbox"):
+            return True
+        # Anything else that made it into the harvest did so because it is
+        # interactive (cursor:pointer / tabindex / onclick); treat as clickable,
+        # except plain form fields handled elsewhere.
+        return self.tag not in ("input", "select", "textarea")
+
+    @property
+    def is_search(self) -> bool:
+        hint = f"{self.type} {self.nameAttr} {self.placeholder} {self.ariaLabel} {self.id}".lower()
+        return self.type == "search" or "search" in hint or "such" in hint
 
     @property
     def aria_role(self) -> str:
@@ -169,13 +212,18 @@ class Action:
     element: ElementDescriptor | None = None
     value: str = ""          # for "fill"
     url: str = ""            # for "goto"
+    # For "fill" on a search-like input: also press Enter to submit, so the
+    # crawler reaches result/detail states instead of stopping at a typed-but-
+    # never-submitted query (a common SPA dead end).
+    submit: bool = False
 
     def describe(self) -> str:
         if self.kind == "goto":
             return f"goto {self.url}"
         name = self.element.accessible_name if self.element else "?"
         if self.kind == "fill":
-            return f"fill {name!r} = {self.value!r}"
+            tail = " + Enter" if self.submit else ""
+            return f"fill {name!r} = {self.value!r}{tail}"
         return f"click {name!r}"
 
     def code_lines(self, page: str = "page") -> list[str]:
@@ -185,9 +233,29 @@ class Action:
         assert self.element is not None
         loc = self.element.locator_code(page)
         if self.kind == "fill":
-            return [f"{loc}.fill({_q(self.value)})"]
-        # click: scroll into view defensively, then click
-        return [f"{loc}.click()", f"{page}.wait_for_load_state()"]
+            lines = [f"{loc}.fill({_q(self.value)})"]
+            if self.submit:
+                # Submit the query (Enter), then wait for the result render.
+                lines.append(f"{loc}.press(\"Enter\")")
+                lines.append(f"{page}.wait_for_load_state()")
+            return lines
+        # click with a viewport-robust fallback: a normal click first, then a
+        # force click for elements Playwright reports as "outside of the viewport"
+        # (sidenav/footer links in scroll containers) that would otherwise retry
+        # until timeout. force=True skips the actionability/viewport checks without
+        # waiting (a plain scroll_into_view_if_needed can itself time out).
+        # Short timeout on the normal click so a blocked element falls back fast
+        # instead of burning the full per-action timeout (×tests ×flakiness =
+        # minutes). Fallback dispatches a synthetic DOM click, which works even
+        # for elements Playwright reports as "outside of the viewport" (force=True
+        # still clicks by coordinate and fails for genuinely off-screen elements).
+        return [
+            "try:",
+            f"    {loc}.click(timeout=2500)",
+            "except Exception:",
+            f"    {loc}.dispatch_event(\"click\")",
+            f"{page}.wait_for_load_state()",
+        ]
 
 
 def normalise_url(url: str) -> str:

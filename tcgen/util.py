@@ -58,6 +58,9 @@ def truncate(s: str, limit: int = 2000) -> str:
 
 _BARE_GETBY_RE = re.compile(r"(?<![\.\w])get_by_\w+\s*\(")
 _LEFTOVER_REF_RE = re.compile(r"\(\s*[a-z]\d+\s*\)")  # e.g. click(e1) — exploration ref
+# Exploration ref leaked as a literal locator string, e.g. get_by_text("e1") or
+# name="e3". Real app labels are virtually never exactly e<digits>.
+_REF_AS_TEXT_RE = re.compile(r"""(?:get_by_\w+\(|name\s*=)\s*['"]e\d+['"]""")
 
 
 def validate_playwright_code(code: str) -> list[str]:
@@ -76,9 +79,46 @@ def validate_playwright_code(code: str) -> list[str]:
         issues.append("get_by_*() ohne page/locator-Präfix (z. B. page.get_by_role(...)).")
     if _LEFTOVER_REF_RE.search(code):
         issues.append("verweist auf undefinierte Explorations-Refs wie e1 (z. B. click(e1)).")
+    if _REF_AS_TEXT_RE.search(code):
+        issues.append("nutzt einen Explorations-Ref als Locator-Text (z. B. "
+                      'get_by_text("e1") / name="e3") — das ist kein echtes UI-Label.')
     if "from playwright.sync_api import" not in code:
         issues.append("fehlender Import: from playwright.sync_api import Page, expect")
     return issues
+
+
+_COUNT_GT_RE = re.compile(
+    r"""expect\(\s*(?P<loc>.+?)\s*\)\.to_have_count_greater_than\(\s*(?P<n>\d+)\s*\)""")
+# Invented "at least N" variants of to_have_count, e.g.
+#   expect(X).to_have_count(1, minimum=True)
+#   expect(X).to_have_count(1, minimum=True, timeout=5000)
+_COUNT_MIN_RE = re.compile(
+    r"""expect\(\s*(?P<loc>.+?)\s*\)\.to_have_count\(\s*(?P<n>\d+)\s*,"""
+    r"""[^)]*minimum\s*=\s*True[^)]*\)""")
+
+
+def postprocess_playwright_code(code: str) -> str:
+    """Deterministically fix common LLM API slips so the module runs.
+
+    LLMs frequently invent Playwright methods or forget imports; these are cheap,
+    safe rewrites that turn a guaranteed crash into a real assertion:
+    * ``expect(X).to_have_count_greater_than(N)`` -> ``assert (X).count() > N``
+      (no such Playwright assertion exists).
+    * add ``import re`` when ``re.`` is used but not imported.
+    """
+    # Invented "greater than" / "at least" count assertions -> plain asserts.
+    code = _COUNT_GT_RE.sub(r"assert (\g<loc>).count() > \g<n>", code)
+    code = _COUNT_MIN_RE.sub(r"assert (\g<loc>).count() >= \g<n>", code)
+    # Missing `import re` (models use re.compile for name=... regex locators).
+    if re.search(r"\bre\.", code) and not re.search(r"^\s*import re\b", code, re.MULTILINE):
+        lines = code.splitlines()
+        insert_at = 0
+        for i, ln in enumerate(lines):
+            if ln.startswith(("import ", "from ")):
+                insert_at = i + 1
+        lines.insert(insert_at, "import re")
+        code = "\n".join(lines)
+    return code
 
 
 def model_family(model: str) -> str:

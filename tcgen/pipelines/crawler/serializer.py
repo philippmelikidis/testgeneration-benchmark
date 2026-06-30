@@ -91,5 +91,8 @@ def generate(target: TargetApp, settings: Settings | None = None,
             "element_coverage": _element_coverage(crawl),
             "discovered_elements": crawl.discovered_elements,
             "crawl_time_s": crawl.elapsed_s,
+            # Grounding for the hybrid (Skript_H): real verified locators + routes.
+            "locator_catalog": crawl.locator_catalog,
+            "routes": crawl.routes,
         },
     )

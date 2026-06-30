@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import signal
 import subprocess
 import sys
 import tempfile
@@ -83,10 +85,51 @@ def _register_overlay_handlers(page):
             pass
 
 
+# Disable CSS animations/transitions so Material ripples and route transitions
+# don't leave elements "unstable" (Playwright then retries a click until timeout
+# and the test fails spuriously). Injected on every document via an init script,
+# so it applies after each navigation. Part of the shared evaluation harness ->
+# applied identically to every pipeline, so it cannot bias the comparison.
+_NO_ANIM_JS = """
+(() => {{
+  const css = '*,*::before,*::after{{animation-duration:0s!important;' +
+    'animation-delay:0s!important;transition-duration:0s!important;' +
+    'transition-delay:0s!important;scroll-behavior:auto!important;}}';
+  const apply = () => {{
+    const s = document.createElement('style');
+    s.textContent = css;
+    (document.head || document.documentElement).appendChild(s);
+  }};
+  if (document.head) apply();
+  else document.addEventListener('DOMContentLoaded', apply);
+}})();
+"""
+
+
+# Pre-seed the "already dismissed" state so the welcome dialog and cookie banner
+# never appear. This is the reliable fix for the recurring failure where the
+# welcome MODAL marks the rest of the app aria-hidden, so role-based locators
+# (e.g. get_by_role("button", name="Open Sidenav")) can't find anything and time
+# out. Reactive overlay handlers fire too late for this. Part of the shared
+# harness -> applied identically to every pipeline (not result tuning).
+_PREDISMISS_JS = """
+(() => {{
+  try {{ localStorage.setItem('welcomebanner_status','dismiss'); }} catch(e) {{}}
+  try {{ localStorage.setItem('cookieconsent_status','dismiss'); }} catch(e) {{}}
+  try {{ document.cookie = 'cookieconsent_status=dismiss; path=/'; }} catch(e) {{}}
+}})();
+"""
+
+
 @pytest.fixture(autouse=True)
 def _harness(page):
     page.set_default_timeout({timeout})
-    _register_overlay_handlers(page)
+    for _script in (_PREDISMISS_JS, _NO_ANIM_JS):
+        try:
+            page.add_init_script(_script)
+        except Exception:
+            pass
+    _register_overlay_handlers(page)  # fallback for anything still shown
     yield
 '''
 
@@ -122,6 +165,7 @@ class TestRunner:
             for nodeid, outcome in first.get("outcomes", {}).items()
             if outcome == "passed"
         }
+        exercised = objective.exercised_locator_set(script.code, passed_fns)
 
         return ExecutionResult(
             executed=first["executed"],
@@ -132,7 +176,8 @@ class TestRunner:
             duration_s=round(first["duration"], 2),
             ssr=objective.successful_steps_ratio(n_passed, n_tests),
             element_coverage=objective.element_coverage(script.code),
-            exercised_coverage=objective.exercised_locator_count(script.code, passed_fns),
+            exercised_coverage=len(exercised),
+            exercised_locators=sorted(exercised),
             flakiness=self._flakiness(runs),
             first_error=first.get("first_error"),
             stdout=first["stdout"][-4000:],
@@ -171,17 +216,31 @@ class TestRunner:
         ]
         if not self.settings.headless:
             cmd.append("--headed")
+        # Run in its own process group so a timeout can kill the WHOLE tree
+        # (pytest + the chromium it spawned). With plain subprocess.run(timeout=)
+        # only the direct child is killed; the browser keeps the stdout pipe open
+        # and the call blocks far beyond the timeout (the "20-minute run").
+        proc = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            cwd=str(GENERATED_DIR.parent), start_new_session=True,
+        )
         try:
-            proc = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=self.run_timeout_s,
-                cwd=str(GENERATED_DIR.parent),
-            )
-            stdout, stderr, rc = proc.stdout, proc.stderr, proc.returncode
-        except subprocess.TimeoutExpired as exc:
+            stdout, stderr = proc.communicate(timeout=self.run_timeout_s)
+            rc = proc.returncode
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            except (ProcessLookupError, PermissionError, OSError):
+                pass
+            try:
+                stdout, stderr = proc.communicate(timeout=15)
+            except Exception:  # noqa: BLE001
+                stdout, stderr = "", "TIMEOUT"
             return {"executed": False, "n_tests": 0, "n_passed": 0, "n_failed": 0,
                     "duration": float(self.run_timeout_s), "outcomes": {},
-                    "first_error": "TIMEOUT: Gesamtlauf überschritt run_timeout_s",
-                    "stdout": exc.stdout or "", "stderr": "TIMEOUT"}
+                    "first_error": (f"TIMEOUT: Gesamtlauf überschritt "
+                                    f"{self.run_timeout_s}s (hart abgebrochen)"),
+                    "stdout": stdout or "", "stderr": stderr or "TIMEOUT"}
 
         parsed = self._parse_report(report)
         # "executed" means: the module imported/collected AND ran at least one

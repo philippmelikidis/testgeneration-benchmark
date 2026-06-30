@@ -75,6 +75,12 @@ for col, row, result in zip(cols, rows, results):
         st.metric("Ausführbar / grün",
                   f"{ui.fmt(row['executed'])} / {ui.fmt(row['passed'])}")
         st.metric("SSR", ui.fmt(row["ssr"]))
+        # ISO sub-characteristics at a glance (Completeness etc.).
+        st.caption(
+            f"ISO Correctness: **{ui.fmt(row['iso_correctness'])}**  \n"
+            f"ISO Completeness: **{ui.fmt(row['iso_completeness'])}**  \n"
+            f"ISO Appropriateness: **{ui.fmt(row['iso_appropriateness'])}**"
+        )
         if row["error"]:
             st.error(row["error"], icon=None)
 

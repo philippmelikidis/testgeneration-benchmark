@@ -5,10 +5,14 @@ recording the action paths between them in a state graph. The selected paths are
 handed to :mod:`tcgen.pipelines.crawler.serializer` to emit ``Skript_C``.
 
 Design choices:
-* **Replay-from-root** exploration: to reach a state we replay its recorded
-  action path in a fresh page. This is deterministic and avoids fragile
-  back-button handling on SPAs, at the cost of O(states*depth) navigations,
-  which is acceptable for the bounded state budget used in the study.
+* **Incremental reach** exploration (fast): links are followed by navigating
+  straight to their (SPA hash) target, and non-link states are re-established by
+  a single ``goto`` to their URL — falling back to a full action-path replay only
+  for states a URL cannot reproduce (open menus/dialogs, post-submit views). This
+  keeps exploration deterministic and avoids fragile back-button handling on SPAs,
+  while replacing the old O(states*depth) from-root replay (one navigation per
+  candidate instead of one per path step). The recorded path stays click/fill-
+  based, so ``Skript_C`` still reproduces real user interactions.
 * The crawler is **requirement-agnostic** by design — that is precisely the
   traditional baseline the study contrasts against the LLM agent.
 """
@@ -57,6 +61,12 @@ class CrawlOutput:
     # Distinct interactable elements found across ALL crawled states — the
     # "reachable surface" used as the denominator for completeness.
     discovered_elements: int = 0
+    # Grounding for the hybrid (Skript_H): the REAL, verified locators the crawler
+    # used (label/role/locator_code) and the distinct routes it reached. Passed to
+    # the LLM so Skript_H can write story tests grounded in elements that actually
+    # exist, instead of inventing selectors.
+    locator_catalog: list[dict] = field(default_factory=list)
+    routes: list[str] = field(default_factory=list)
 
 
 class Crawler:
@@ -87,7 +97,9 @@ class Crawler:
             browser = pw.chromium.launch(headless=self.settings.headless)
             ctx = browser.new_context()
             page = ctx.new_page()
-            page.set_default_timeout(8000)
+            # Short per-action timeout during exploration so broken/blocked
+            # candidate actions fail fast instead of stalling the whole crawl.
+            page.set_default_timeout(self.settings.crawler_action_timeout_ms)
 
             phase.update(0.02, f"Crawler startet bei {start_url}")
             self._apply(page, root_path[0])  # actually navigate to the entry URL
@@ -98,17 +110,29 @@ class Crawler:
             paths[root_sig] = root_path
             graph.add_node(root_sig, url=root_state.url, title=root_state.title)
 
+            budget_s = self.settings.crawler_time_budget_s
             frontier: list[tuple[str, int]] = [(root_sig, 0)]
             while frontier and len(states) < max_states:
+                if budget_s and (time.time() - t0) > budget_s:
+                    phase.log(f"Zeitbudget {budget_s}s erreicht — Crawl wird beendet "
+                              f"({len(states)} Zustände)")
+                    break
                 sig, depth = frontier.pop(0)
                 if depth >= self.settings.crawler_max_depth:
                     continue
                 state = states[sig]
-                for action in self._candidate_actions(state):
+                candidates = self._candidate_actions(state)
+                for i, action in enumerate(candidates, start=1):
                     if len(states) >= max_states:
                         break
+                    if budget_s and (time.time() - t0) > budget_s:
+                        break
+                    # Stream per-action progress so a state with many candidates
+                    # is visibly working, not "hung".
+                    phase.log(f"  Zustand {len(states)} · Aktion {i}/{len(candidates)} "
+                              f"· {action.describe()}")
                     new_path = paths[sig] + [action]
-                    new_state = self._replay_and_capture(page, new_path)
+                    new_state = self._reach_via_action(page, state, paths[sig], action)
                     if new_state is None:
                         continue
                     nsig = new_state.signature()
@@ -130,6 +154,7 @@ class Crawler:
         scenarios = self._select_scenarios(
             states, paths, root_sig, max_scenarios=self.settings.crawler_max_scenarios)
         discovered = len({e.signature() for st in states.values() for e in st.elements})
+        catalog, routes = self._build_catalog(states)
         phase.update(1.0, f"Crawl fertig: {len(states)} Zustände, "
                           f"{graph.number_of_edges()} Übergänge, "
                           f"{len(scenarios)} Szenarien, {discovered} Elemente")
@@ -141,7 +166,46 @@ class Crawler:
             n_edges=graph.number_of_edges(),
             elapsed_s=round(time.time() - t0, 2),
             discovered_elements=discovered,
+            locator_catalog=catalog,
+            routes=routes,
         )
+
+    def _build_catalog(self, states: dict[str, PageState], limit: int = 250):
+        """Distinct (label, role, locator_code) catalog + distinct routes.
+
+        The locator catalog is the crawler's REAL, verified element vocabulary —
+        handed to the hybrid refiner so Skript_H grounds every locator in
+        something that actually exists in the app. Off-task elements are filtered
+        out: external links (e.g. the GitHub link) and avoided routes (score-board,
+        admin, logout) — otherwise the grounded Skript_H may wander off the app
+        (e.g. "search" on GitHub instead of in the shop)."""
+        catalog: list[dict] = []
+        seen: set[str] = set()
+        for st in states.values():
+            for el in st.elements:
+                # Drop links the crawler would not follow (external origin,
+                # mailto/tel, avoided substrings) so they never enter grounding.
+                if el.tag == "a" and not self._followable_link(el.href):
+                    continue
+                loc = el.locator_code("page")
+                if loc in seen:
+                    continue
+                seen.add(loc)
+                catalog.append({
+                    "label": (el.accessible_name or el.text or el.tag)[:60],
+                    "role": el.aria_role,
+                    "locator": loc,
+                    # Route where this element was first seen — lets the hybrid
+                    # map a story to the RIGHT element (e.g. register fields on
+                    # /#/register, not a look-alike on the feedback form).
+                    "url": st.url_key,
+                })
+                if len(catalog) >= limit:
+                    break
+            if len(catalog) >= limit:
+                break
+        routes = sorted({st.url_key for st in states.values()})
+        return catalog, routes
 
     # ------------------------------------------------------------------ #
     # exploration helpers
@@ -153,16 +217,17 @@ class Crawler:
         for el in state.elements:
             if el.is_input:
                 value = self._value_for(el)
-                act = Action(kind="fill", element=el, value=value)
+                # Submit search-like fields so result/detail states are reached.
+                act = Action(kind="fill", element=el, value=value, submit=el.is_search)
             elif el.tag == "a":
                 if not self._followable_link(el.href):
                     continue
                 act = Action(kind="click", element=el)
-            elif el.is_submit:
+            elif el.is_clickable:
                 act = Action(kind="click", element=el)
             else:
                 continue
-            key = el.signature() + act.kind
+            key = el.signature() + act.kind + ("!" if act.submit else "")
             if key in seen:
                 continue
             seen.add(key)
@@ -189,6 +254,11 @@ class Crawler:
         # Bare "#" is a no-op anchor; "#/route" is internal SPA navigation (allow).
         if href == "#" or (href.startswith("#") and len(href) <= 2):
             return False
+        # Same-origin redirect bouncers (e.g. Juice Shop's
+        # /redirect?to=https://github.com/...) leave the app under test — off-task
+        # and usually rendered off-screen in the sidenav. Skip them.
+        if "redirect?to=" in href or "/redirect?" in href:
+            return False
         absolute = urljoin(self.target.base_url + "/", href)
         if self._origin_of(absolute) != self._origin:
             return False
@@ -196,15 +266,55 @@ class Crawler:
             return False
         return True
 
-    def _replay_and_capture(self, page, path: list[Action]) -> PageState | None:
-        """Replay an action path from root in a fresh page; capture the result."""
+    def _reach_via_action(self, page, state: PageState, state_path: list[Action],
+                          action: Action) -> PageState | None:
+        """Apply ``action`` from ``state`` and capture the resulting state — fast.
+
+        Avoids the old O(depth) from-root replay for every candidate:
+
+        * **Link** (``<a href>``): navigate straight to the link target. On an SPA
+          a link click is equivalent to loading its hash route, so a single
+          ``goto`` reaches the same DOM the click would — and the *next* link
+          candidate is likewise a single ``goto`` (no separate restore step). The
+          recorded action stays a ``click`` so ``Skript_C`` still clicks the link.
+        * **Other** (button / fill / generic): cheaply restore the state (one
+          ``goto`` to its URL, or a path replay as fallback for non-URL-addressable
+          states such as an open menu/dialog), then apply the action.
+        """
         try:
-            for action in path:
-                self._apply(page, action)
-            return self._capture(page, path)
+            el = action.element
+            if action.kind == "click" and el is not None and el.tag == "a" and el.href:
+                absolute = urljoin(self.target.base_url + "/", el.href)
+                self._apply(page, Action(kind="goto", url=absolute))
+                return self._capture(page, state_path + [action])
+            if not self._restore(page, state, state_path):
+                return None
+            self._apply(page, action)
+            return self._capture(page, state_path + [action])
         except Exception as exc:  # noqa: BLE001 - exploration must be resilient
-            log.debug("Path replay failed (%s): %s", path[-1].describe() if path else "-", exc)
+            log.debug("Reach via %s failed: %s", action.describe(), exc)
             return None
+
+    def _restore(self, page, state: PageState, state_path: list[Action]) -> bool:
+        """Re-establish ``state`` on the live page before applying a non-link action.
+
+        Tries the cheap path first — a direct ``goto`` to the state's URL — and
+        verifies the element signature matches. Falls back to replaying the full
+        action path for states that a URL alone cannot reproduce (open menus,
+        dialogs, post-submit views)."""
+        try:
+            self._apply(page, Action(kind="goto", url=state.url))
+            if self._capture(page, state_path).signature() == state.signature():
+                return True
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            for a in state_path:
+                self._apply(page, a)
+            return self._capture(page, state_path).signature() == state.signature()
+        except Exception as exc:  # noqa: BLE001
+            log.debug("Restore failed for %s: %s", state.url, exc)
+            return False
 
     def _apply(self, page, action: Action) -> None:
         if action.kind == "goto":
@@ -215,7 +325,14 @@ class Crawler:
         locator = self._resolve(page, action.element)
         if action.kind == "fill":
             locator.fill(action.value)
+            if action.submit:
+                locator.press("Enter")
+                self._settle(page)
         else:
+            # Normal click only during exploration: a state reached via a
+            # force/synthetic click often cannot be reproduced on replay, which
+            # produces fragile scenarios. If a normal click fails the candidate is
+            # simply skipped (caller catches), keeping recorded paths replayable.
             locator.click()
             self._settle(page)
 

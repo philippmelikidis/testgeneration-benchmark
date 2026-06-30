@@ -27,6 +27,7 @@ class JobManager:
         domain_context: str = "",
         user_story_ids: list[str] | None = None,
         repetitions: int = 1,
+        reuse_crawler: bool = False,
     ) -> str:
         """Persist a pending job and spawn a detached worker process."""
         job = JobState(
@@ -38,6 +39,7 @@ class JobManager:
             domain_context=domain_context,
             user_story_ids=user_story_ids or [],
             repetitions=repetitions,
+            reuse_crawler=reuse_crawler,
         )
         self.store.save(job)
 

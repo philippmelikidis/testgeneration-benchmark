@@ -17,13 +17,17 @@ from tcgen.llm.base import LLMProvider, Message
 
 class OllamaProvider(LLMProvider):
     def __init__(self, model: str, *, base_url: str = "http://localhost:11434",
-                 api_key: str = "", think: bool = False, **kw):
+                 api_key: str = "", think: bool = False, request_timeout_s: float = 120.0,
+                 **kw):
         super().__init__(model, **kw)
         # Imported lazily so the package imports without ollama installed.
         import ollama
 
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else None
-        self._client = ollama.Client(host=base_url, headers=headers)
+        # A request timeout is essential: without it a stalled cloud call hangs the
+        # whole agent loop indefinitely (each of N exploration steps is a call).
+        self._client = ollama.Client(host=base_url, headers=headers,
+                                     timeout=request_timeout_s)
         self.base_url = base_url
         self.is_cloud = bool(api_key)
         # Thinking models (glm-5.1, gpt-oss, deepseek) otherwise spend the token
