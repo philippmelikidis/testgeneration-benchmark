@@ -47,6 +47,24 @@ def _as_str(value) -> str:
     return str(value).strip()
 
 
+# An observation element line, e.g. '  [e5] button "Open search"'. We keep the
+# 'role "name"' part (dropping the ephemeral ref) as the agent's real vocabulary.
+_OBS_EL_RE = re.compile(r'^\s*\[[a-zA-Z]?\d+\]\s+(.*\S)\s*$')
+
+
+def _collect_observed(observation: str, into: dict) -> None:
+    """Accumulate distinct 'role "name"' element descriptions from an observation.
+
+    These are the elements the agent ACTUALLY saw while exploring. Feeding them to
+    the synthesis step keeps it grounded in real, observed labels (e.g. the real
+    "Open search" button) instead of guessing generic names like "Search" — while
+    staying LLM-only (this is the agent's own observation, not the crawler map)."""
+    for line in observation.splitlines():
+        m = _OBS_EL_RE.match(line)
+        if m:
+            into.setdefault(m.group(1).strip(), None)
+
+
 def _story_block(stories: list[UserStory]) -> str:
     out = []
     for s in stories:
@@ -73,12 +91,12 @@ class LLMAgent:
         session, backend = self._open_session(phase)
         try:
             observation = session.navigate(self.target.entry_paths[0])
-            action_log, pages = self._explore(session, observation, phase, story_block)
+            action_log, pages, observed = self._explore(session, observation, phase, story_block)
         finally:
             session.__exit__(None, None, None)
         phase.update(0.9, "Synthese der Testsuite aus Beobachtungen")
         transcript = self._build_transcript(action_log, pages)
-        code = self._synthesize(transcript, story_block)
+        code = self._synthesize(transcript, story_block, observed)
         code = self._maybe_repair(code, phase)
         code = self._absolutise_gotos(code)
         code = postprocess_playwright_code(code)
@@ -142,10 +160,14 @@ class LLMAgent:
                  story_block: str | None = None):
         action_log: list[str] = []
         pages: dict[str, str] = {}  # url -> digest (deduplicated)
+        observed: dict[str, None] = {}  # distinct 'role "name"' seen (ordered set)
         max_steps = self.settings.agent_max_steps
         goal = explore_goal(story_block, self.target.base_url)
+        last_sig = ""
+        repeats = 0
 
         for step in range(max_steps):
+            _collect_observed(observation, observed)
             pages.setdefault(session.page.url, observation)
             phase.update(0.02 + 0.86 * (step / max_steps),
                          f"Agent: Schritt {step + 1}/{max_steps} · {session.page.url}")
@@ -173,14 +195,37 @@ class LLMAgent:
             if not kind or kind == "finish":
                 action_log.append(f"{step}: finish")
                 break
+            # No-progress guard: if the model repeats the exact same action, nudge
+            # it to pick a DIFFERENT element instead of aborting exploration (an
+            # early abort left S with almost no observations). Only give up if it
+            # stays stuck for several repeats.
+            sig = f"{kind}|{ref}|{url}|{value}"
+            repeats = repeats + 1 if sig == last_sig else 0
+            last_sig = sig
+            if repeats >= 1:
+                if repeats >= 4:
+                    phase.log("  Abbruch: dauerhaft festgefahren — gehe zur Synthese")
+                    action_log.append(f"{step}: abort (stuck)")
+                    break
+                phase.log("  wiederholte Aktion — Hinweis: anderes Element wählen")
+                observation = (
+                    "NOTE: You repeated the same action and it produced no new "
+                    "state. Do NOT repeat it — pick a DIFFERENT element ref below "
+                    "to go deeper (open a product, a nav link, a form).\n\n"
+                    + session.observe())
+                action_log.append(f"{step}: repeat -> nudge")
+                continue
             try:
                 observation = self._dispatch(session, kind, ref, url, value)
+                n_els = sum(1 for ln in observation.splitlines() if _OBS_EL_RE.match(ln))
+                phase.log(f"    → {n_els} Elemente beobachtet auf {session.page.url}")
                 action_log.append(f"{step}: {kind} {ref}{url}"
                                    f"{(' = ' + value) if kind == 'fill' else ''}")
             except Exception as exc:  # noqa: BLE001
                 observation = f"ERROR executing {kind}: {exc}\n\n{session.observe()}"
                 action_log.append(f"{step}: {kind} -> ERROR: {exc}")
-        return action_log, pages
+        _collect_observed(observation, observed)  # capture the final observation too
+        return action_log, pages, list(observed)
 
     def _dispatch(self, session: BrowserSession, kind: str, ref: str, url: str, value: str) -> str:
         if kind == "navigate":
@@ -193,19 +238,28 @@ class LLMAgent:
             return "PAGE TEXT:\n" + session.get_text() + "\n\n" + session.observe()
         raise ValueError(f"Unknown action {kind!r}")
 
+    @staticmethod
+    def _format_observed(observed: list[str] | None, limit: int = 80) -> str:
+        if not observed:
+            return ""
+        return "\n".join(f"- {e}" for e in observed[:limit])
+
     def _build_transcript(self, action_log: list[str], pages: dict[str, str]) -> str:
         parts = ["ACTION LOG:", "\n".join(action_log), "", "PAGES OBSERVED:"]
         for url, digest in pages.items():
             parts.append(f"\n--- {url} ---\n{truncate(digest, 1200)}")
         return truncate("\n".join(parts), 6000)
 
-    def _synthesize(self, transcript: str, story_block: str | None = None) -> str:
+    def _synthesize(self, transcript: str, story_block: str | None = None,
+                    observed: list[str] | None = None) -> str:
+        observed_block = self._format_observed(observed)
         if story_block:
             system = SYNTHESIS_SYSTEM_STORY
-            user = synthesis_user_prompt_story(self.target.base_url, story_block, transcript)
+            user = synthesis_user_prompt_story(self.target.base_url, story_block,
+                                               transcript, observed_block)
         else:
             system = SYNTHESIS_SYSTEM
-            user = synthesis_user_prompt(self.target.base_url, transcript)
+            user = synthesis_user_prompt(self.target.base_url, transcript, observed_block)
         messages: list[Message] = [
             {"role": "system", "content": system},
             {"role": "user", "content": user},

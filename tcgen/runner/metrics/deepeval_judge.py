@@ -62,10 +62,19 @@ _CRITERIA_STORY = {
         "user-facing locators (get_by_role/label/text) and web-first assertions, "
         "without irrelevant or redundant steps. Higher is better."
     ),
+    # NOTE: phrased as GROUNDEDNESS (higher = better) to match G-Eval's natural
+    # "higher = better" scoring; the orchestrator INVERTS it into a hallucination
+    # score (higher = worse) so the label stays intuitive.
     "hallucination": (
-        "Award a HIGH score when the test references UI elements, routes, or "
-        "features NOT implied by the user stories or the explored application. "
-        "Award a LOW score when every element used is plausibly grounded."
+        "Groundedness: judge how well EVERY referenced UI element, route and "
+        "selector is grounded — i.e. plausibly exists in the application under "
+        "test. Something is grounded if it is named/implied by the USER STORIES "
+        "(e.g. register/login pages, email/password fields), OR appears in the "
+        "KNOWN APPLICATION SURFACE, OR is clearly standard for such an app. The "
+        "surface is positive evidence, NOT an exhaustive whitelist ('not observed' "
+        "does not mean invented). Award a HIGH score when all references plausibly "
+        "exist; award a LOW score only for clearly fabricated references (made-up "
+        "data-testid, implausible routes)."
     ),
     "readability": (
         "Judge readability and maintainability: descriptive test names, clear "
@@ -88,14 +97,18 @@ _CRITERIA_INTRINSIC = {
         "redundant steps. Do NOT penalise it for testing areas that are not in any "
         "requirement. Higher is better."
     ),
+    # Phrased as GROUNDEDNESS (higher = better); inverted into a hallucination
+    # score (higher = worse) by the orchestrator.
     "hallucination": (
-        "Award a HIGH score ONLY when the test references UI elements, routes, or "
-        "locators that are implausible for the application under test (clearly "
-        "invented names/selectors). Do NOT treat 'not part of a user story' as "
-        "hallucination. If a KNOWN APPLICATION SURFACE is given in the input, treat "
-        "every route/element listed there as REAL (e.g. /#/search, /#/login are "
-        "real if present) and only flag things absent from it AND implausible. "
-        "Award a LOW score when every targeted element is plausibly real for the app."
+        "Groundedness: judge how well EVERY referenced UI element, route and "
+        "selector plausibly exists in the application under test. Treat the KNOWN "
+        "APPLICATION SURFACE as positive evidence of what exists, but NOT as an "
+        "exhaustive whitelist — the crawler only saw part of the app, so an element "
+        "plausibly real for this app that is simply absent from the surface still "
+        "counts as grounded. 'Not observed' / 'not in the surface' does NOT mean "
+        "invented. Award a HIGH score when all references plausibly exist; award a "
+        "LOW score only for clearly fabricated references (made-up data-testid, "
+        "implausible routes)."
     ),
     "readability": (
         "Judge readability and maintainability: descriptive test names, clear "
@@ -165,7 +178,13 @@ class DeepEvalJudge:
                 metric = GEval(name=key, criteria=criteria,
                                evaluation_params=params, model=model)
                 metric.measure(test_case)
-                scores[key] = round(float(metric.score), 4)
+                score = float(metric.score)
+                # The hallucination criterion is phrased as GROUNDEDNESS (G-Eval
+                # scores higher = better). Invert so the stored value is a real
+                # hallucination score: higher = MORE invented references = worse.
+                if key == "hallucination":
+                    score = 1.0 - score
+                scores[key] = round(score, 4)
                 reasons[key] = (metric.reason or "")[:500]
             except Exception as exc:  # noqa: BLE001
                 log.warning("Judge metric %r failed: %s", key, exc)

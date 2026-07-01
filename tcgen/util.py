@@ -106,9 +106,12 @@ def postprocess_playwright_code(code: str) -> str:
       (no such Playwright assertion exists).
     * add ``import re`` when ``re.`` is used but not imported.
     """
-    # Invented "greater than" / "at least" count assertions -> plain asserts.
-    code = _COUNT_GT_RE.sub(r"assert (\g<loc>).count() > \g<n>", code)
-    code = _COUNT_MIN_RE.sub(r"assert (\g<loc>).count() >= \g<n>", code)
+    # Invented "greater than" / "at least" count assertions -> a WAITING check.
+    # `expect(loc.first).to_be_visible()` auto-waits for the first match, so it
+    # handles async-rendered results (e.g. search hits); a bare `loc.count()` does
+    # NOT wait and returns 0 before the SPA renders.
+    code = _COUNT_GT_RE.sub(r"expect((\g<loc>).first).to_be_visible()", code)
+    code = _COUNT_MIN_RE.sub(r"expect((\g<loc>).first).to_be_visible()", code)
     # Missing `import re` (models use re.compile for name=... regex locators).
     if re.search(r"\bre\.", code) and not re.search(r"^\s*import re\b", code, re.MULTILINE):
         lines = code.splitlines()

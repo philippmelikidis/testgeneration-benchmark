@@ -101,13 +101,31 @@ Fix them and return the complete corrected module:
 """
 
 
-def synthesis_user_prompt(base_url: str, transcript: str) -> str:
+def _observed_section(observed_block: str) -> str:
+    if not observed_block:
+        return ""
+    return (
+        "\nOBSERVED ELEMENTS (what you actually saw — use these VERBATIM, do not "
+        "paraphrase e.g. to \"Search\", and do not invent CSS/data-testid):\n"
+        "  · entries like `button \"Open search\"` -> get_by_role(\"button\", "
+        "name=\"Open search\")\n"
+        "  · entries like `text \"Apple Juice (1000ml)\"` -> get_by_text(\"Apple "
+        "Juice (1000ml)\") (these are product cards/tiles; NEVER "
+        "get_by_role(\"generic\", ...))\n"
+        "  · for 'at least one' of many, assert expect(locator.first)"
+        ".to_be_visible() — never `.count()` (it does not wait) and never "
+        "`expect(x).first` (put .first on the LOCATOR: expect(x.first)).\n"
+        f"{observed_block}\n"
+    )
+
+
+def synthesis_user_prompt(base_url: str, transcript: str, observed_block: str = "") -> str:
     return f"""\
 BASE URL: {base_url}
 
 WHAT YOU OBSERVED WHILE EXPLORING (urls, elements, page text):
 {transcript}
-
+{_observed_section(observed_block)}
 Now write the complete pytest-playwright end-to-end test suite for this
 application (several test functions). Use descriptive test names.
 """
@@ -156,7 +174,8 @@ def explore_goal(story_block: str | None, base_url: str = "") -> str:
             "flows (navigation, search, forms, detail views).")
 
 
-def synthesis_user_prompt_story(base_url: str, story_block: str, transcript: str) -> str:
+def synthesis_user_prompt_story(base_url: str, story_block: str, transcript: str,
+                                observed_block: str = "") -> str:
     return f"""\
 BASE URL: {base_url}
 
@@ -165,7 +184,10 @@ USER STORIES TO VERIFY (one test each):
 
 WHAT YOU OBSERVED WHILE EXPLORING (urls, elements, page text):
 {transcript}
-
+{_observed_section(observed_block)}
 Now write the complete pytest-playwright test suite that verifies these user
 stories (plus other important flows). Use descriptive, story-referencing names.
+Map each story to the OBSERVED ELEMENTS above (e.g. the search toggle is the
+observed "Open search" button, not a generic "Search"); if a story's element was
+not observed, assert conservatively instead of inventing a selector.
 """

@@ -207,6 +207,14 @@ class MCPClient:
         for item in result.get("content", []):
             if isinstance(item, dict) and item.get("type") == "text":
                 parts.append(item.get("text", ""))
+        if not parts:
+            # Fall back to whatever the server returned so nothing is silently lost
+            # (some servers put the snapshot under structuredContent or non-text).
+            sc = result.get("structuredContent")
+            if sc:
+                parts.append(json.dumps(sc, ensure_ascii=False))
+            elif result:
+                parts.append(json.dumps(result, ensure_ascii=False))
         return "\n".join(parts)
 
     def close(self) -> None:
@@ -295,14 +303,19 @@ class PlaywrightMcpSession:
                     f"({self._origin(self.base_url)}). Navigation was kept on the "
                     f"target — only explore the target app.\n")
             target = self.base_url
-        text = self._client.call_tool("browser_navigate", {"url": target})
-        return note + self._ingest(text)
+        # Perform the navigation, then take an EXPLICIT snapshot: browser_navigate
+        # does not reliably return the full accessibility tree, so relying on its
+        # result left the agent with no element refs -> it could only navigate,
+        # never click (the endless "navigate to base" loop). browser_snapshot
+        # always returns the current tree with refs.
+        self._client.call_tool("browser_navigate", {"url": target})
+        return note + self.observe()
 
     def click(self, ref: str) -> str:
         el = self._lookup(ref)
-        text = self._client.call_tool(
+        self._client.call_tool(
             "browser_click", {"element": el.description, "ref": ref})
-        return self._ingest(text)
+        return self.observe()
 
     def fill(self, ref: str, value: str) -> str:
         el = self._lookup(ref)
@@ -314,8 +327,8 @@ class PlaywrightMcpSession:
         args = {"element": el.description, "ref": ref, "text": value}
         if submit:
             args["submit"] = True
-        text = self._client.call_tool("browser_type", args)
-        return self._ingest(text)
+        self._client.call_tool("browser_type", args)
+        return self.observe()
 
     def get_text(self) -> str:
         # The accessibility snapshot already carries the page's visible text; the
@@ -324,6 +337,11 @@ class PlaywrightMcpSession:
 
     def observe(self) -> str:
         text = self._client.call_tool("browser_snapshot", {})
+        if not parse_snapshot(text):
+            # Surface the real format so the parser can be fixed precisely instead
+            # of guessed. Appears in the job's proc.log.
+            log.warning("Playwright MCP snapshot yielded 0 parseable elements. "
+                        "Raw result (first 800 chars):\n%s", (text or "")[:800])
         return self._ingest(text)
 
     # ------------------------------------------------------------------ #
@@ -336,10 +354,13 @@ class PlaywrightMcpSession:
         title = snapshot_title(snapshot_text)
         els = parse_snapshot(snapshot_text)[: self.max_elements]
         self.ref_map = {el.ref: el for el in els}
+        self.last_element_count = len(els)
         lines = [f"URL: {self.page.url}", f"TITLE: {title}", "ELEMENTS:"]
         for el in els:
-            name = el.name or "(unnamed)"
-            lines.append(f'  [{el.ref}] {el.role} "{name}"')
+            # Omit the name when absent (no "(unnamed)" placeholder the model would
+            # copy verbatim as a literal name).
+            lines.append(f'  [{el.ref}] {el.role} "{el.name}"' if el.name
+                         else f'  [{el.ref}] {el.role}')
         return "\n".join(lines)
 
     def _lookup(self, ref: str) -> SnapshotEl:

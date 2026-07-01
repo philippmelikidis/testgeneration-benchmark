@@ -117,10 +117,20 @@ class BrowserSession:
         return "\n".join(lines)
 
     def _describe(self, el: ElementDescriptor) -> str:
-        kind = "input" if el.is_input else ("button" if el.is_submit else el.aria_role)
-        name = el.accessible_name or el.placeholder or "(unnamed)"
+        # Use a VALID ARIA role (el.aria_role maps input->textbox, submit->button,
+        # a->link, select->combobox) so the model doesn't copy a fake role like
+        # get_by_role("input", ...). Omit the name entirely when there is none,
+        # rather than emitting a "(unnamed)" placeholder the model would copy as a
+        # literal name.
+        role = el.aria_role
+        name = el.accessible_name or el.placeholder
         extra = f' href="{el.href}"' if el.href else ""
-        return f'{kind} "{name}"{extra}'
+        # Elements with no semantic role (product cards, tiles = ARIA "generic")
+        # should be targeted by TEXT, not get_by_role("generic", ...). Present them
+        # as text so the model reaches for get_by_text.
+        if role == "generic" and name:
+            return f'text "{name}"{extra}'
+        return f'{role} "{name}"{extra}' if name else f'{role}{extra}'
 
     def _lookup(self, ref: str) -> ElementDescriptor:
         if ref not in self.ref_map:
