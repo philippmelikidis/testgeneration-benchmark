@@ -6,25 +6,19 @@
 <title>Findings — OWASP Juice Shop Experiment</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    font-size: 15px; line-height: 1.6; color: #0b0b0b; background: #f7f6f3; padding: 2rem 1rem;
-  }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 15px; line-height: 1.6; color: #0b0b0b; background: #f7f6f3; padding: 2rem 1rem; }
   .page { max-width: 900px; margin: 0 auto; }
   h1 { font-size: 22px; font-weight: 500; margin-bottom: 4px; }
   .meta { font-size: 12px; color: #898781; margin-bottom: 1.4rem; letter-spacing: 0.02em; }
   h2 { font-size: 13px; font-weight: 500; color: #52514e; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
   .section { margin-bottom: 2rem; }
-  .banner { background: #fff8e6; border: 0.5px solid #f0d68a; border-left: 3px solid #c98500; border-radius: 8px; padding: 0.9rem 1.1rem; margin-bottom: 1.6rem; font-size: 13px; color: #6b5300; }
-  .banner strong { color: #8a6a00; }
-
+  .banner { background: #eaf7ef; border: 0.5px solid #a9dcc0; border-left: 3px solid #1baf7a; border-radius: 8px; padding: 0.9rem 1.1rem; margin-bottom: 1.6rem; font-size: 13px; color: #14663f; }
+  .banner strong { color: #0f5030; }
   .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 1rem; }
   .kpi { background: #fff; border: 0.5px solid #e1e0d9; border-radius: 8px; padding: 1rem; text-align: center; }
   .kpi-label { font-size: 11px; color: #898781; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.06em; }
-  .kpi-value { font-size: 28px; font-weight: 500; }
-  .kpi-note { font-size: 11px; margin-top: 3px; }
+  .kpi-value { font-size: 28px; font-weight: 500; } .kpi-note { font-size: 11px; margin-top: 3px; }
   .good { color: #0ca30c; } .warn { color: #c98500; } .bad  { color: #d03b3b; }
-
   .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem; }
   .chart-card { background: #fff; border: 0.5px solid #e1e0d9; border-radius: 12px; padding: 1.25rem; }
   .chart-title { font-size: 13px; font-weight: 500; color: #52514e; margin-bottom: 12px; }
@@ -32,23 +26,20 @@
   .legend { display: flex; gap: 16px; margin-top: 10px; flex-wrap: wrap; }
   .legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #52514e; }
   .legend-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
-
   table.cmp { width: 100%; border-collapse: collapse; background: #fff; border: 0.5px solid #e1e0d9; border-radius: 8px; overflow: hidden; font-size: 13px; }
   table.cmp th, table.cmp td { padding: 8px 10px; text-align: center; border-bottom: 0.5px solid #ecebe4; }
   table.cmp th { background: #f1f0ec; font-weight: 500; color: #52514e; font-size: 12px; }
   table.cmp td:first-child, table.cmp th:first-child { text-align: left; }
   table.cmp tr:last-child td { border-bottom: none; }
-
+  .best { font-weight: 600; color: #0ca30c; }
   .profiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 2rem; }
   .profile { background: #fff; border: 0.5px solid #e1e0d9; border-radius: 12px; padding: 1rem; }
   .profile-title { font-size: 12px; font-weight: 500; color: #0b0b0b; margin-bottom: 8px; }
   .profile ul { list-style: none; display: flex; flex-direction: column; gap: 5px; }
   .profile li { font-size: 11px; color: #52514e; }
-
   .thesis { background: #e6f1fb; border: 0.5px solid #b5d4f4; border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; }
   .thesis-label { font-size: 11px; font-weight: 500; color: #185fa5; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
   .thesis p { font-size: 14px; color: #0b0b0b; line-height: 1.75; }
-
   .finding-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 2rem; }
   .finding { background: #fff; border: 0.5px solid #e1e0d9; border-radius: 12px; padding: 1rem 1.25rem; border-left: 3px solid #2a78d6; }
   .finding.fix { border-left-color: #1baf7a; }
@@ -57,19 +48,17 @@
   .finding p { font-size: 12px; color: #52514e; line-height: 1.6; }
   code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; background: #f1f0ec; padding: 1px 4px; border-radius: 3px; }
   .footnote { font-size: 11px; color: #898781; margin-top: 1rem; }
-
   @media (max-width: 680px) { .kpi-row, .charts-row, .profiles, .finding-grid { grid-template-columns: 1fr 1fr; } }
   @media (max-width: 420px) { .kpi-row, .profiles, .finding-grid { grid-template-columns: 1fr; } }
   @media (prefers-color-scheme: dark) {
     body { background: #1a1a19; color: #ffffff; }
     .kpi, .chart-card, .profile, .finding, table.cmp { background: #242422; border-color: #2c2c2a; }
-    table.cmp th { background: #2c2c2a; color: #c3c2b7; }
-    table.cmp td { border-color: #2c2c2a; }
+    table.cmp th { background: #2c2c2a; color: #c3c2b7; } table.cmp td { border-color: #2c2c2a; }
     .kpi-label, .meta, .chart-title, .footnote { color: #898781; }
     .profile-title, .finding-head, .thesis p, .finding p { color: #ffffff; }
     .profile li, .legend-item { color: #c3c2b7; }
     .thesis { background: #0c2d4a; border-color: #1a4d7a; } .thesis-label { color: #7ab8f5; }
-    .banner { background: #2e2607; border-color: #5c4a10; color: #e5c977; }
+    .banner { background: #0d2e1e; border-color: #1a5c3a; color: #8fe0b5; }
     code { background: #1a1a19; }
   }
 </style>
@@ -79,60 +68,46 @@
 
   <div class="section">
     <h1>Ergebnisbericht — OWASP Juice Shop</h1>
-    <p class="meta">Lauf 20260701-101752 &nbsp;·&nbsp; ollama / kimi-k2.7-code:cloud &nbsp;·&nbsp; Judge glm-5.2:cloud &nbsp;·&nbsp; Stories US-1,2,3,5,6,7 &nbsp;·&nbsp; Einzellauf (3er-Aggregat ausstehend)</p>
+    <p class="meta">Lauf 20260701-192152 &nbsp;·&nbsp; ollama / kimi-k2.7-code:cloud &nbsp;·&nbsp; Judge glm-5.2:cloud &nbsp;·&nbsp; <strong>50 Wiederholungen</strong> (Mittel ± Std) &nbsp;·&nbsp; Stories US-1,2,3,5,6,7 &nbsp;·&nbsp; Crawler Tiefe 5 (100 Elemente entdeckt)</p>
   </div>
 
   <div class="banner">
-    <strong>Wichtige Metrik-Korrektur:</strong> Die Halluzinations-Werte waren zuvor invertiert — G-Eval bewertet „höher = besser erfüllt", der Rohscore war also faktisch <em>Groundedness</em> (höher = besser geerdet), wurde aber als Halluzination (höher = schlechter) gespeichert. Belegt durch den Widerspruch Score↔Begründung (S: Score 1.0 bei Begründung „no invented elements"). Korrigiert: Kriterium als Groundedness formuliert und invertiert → hier bereits als korrigierte Halluzination dargestellt (S 0.00 · L 0.10 · H 0.20).
+    <strong>Zwei Metrik-Korrekturen in dieser Auswertung:</strong> (1) <em>Halluzination</em> war invertiert — G-Eval wertet „höher = besser", der Rohscore war Groundedness; jetzt korrekt (H 0.01 · S 0.04 · L 0.32). (2) <em>Completeness</em> nutzte einen rep-abhängigen Nenner (Union der exercised Locator über 50 Läufe = 165) → kollabierte auf ~0.05; jetzt stabiler Nenner = vom Crawler entdeckte Oberfläche (100 Elemente). <strong>Die Pipeline-Reihenfolge ist gegenüber beiden Nennern robust.</strong>
   </div>
 
   <div class="section">
-    <h2>Hauptmetriken (ISO Functional Suitability + SSR)</h2>
+    <h2>Hauptmetriken — 50-Läufe-Mittel</h2>
     <div class="kpi-row">
-      <div class="kpi"><div class="kpi-label">Crawler (C)</div><div class="kpi-value">0.590</div><div class="kpi-note good">SSR 1.00 · alle grün</div></div>
-      <div class="kpi"><div class="kpi-label">LLM-only (L)</div><div class="kpi-value">0.656</div><div class="kpi-note warn">SSR 0.50</div></div>
-      <div class="kpi"><div class="kpi-label">Story-LLM (S)</div><div class="kpi-value">0.698</div><div class="kpi-note warn">SSR 0.50 · bestes LLM</div></div>
-      <div class="kpi"><div class="kpi-label">Hybrid (H)</div><div class="kpi-value">0.432</div><div class="kpi-note warn">SSR 0.67</div></div>
+      <div class="kpi"><div class="kpi-label">Crawler (C)</div><div class="kpi-value">0.463</div><div class="kpi-note good">SSR 1.00</div></div>
+      <div class="kpi"><div class="kpi-label">LLM-only (L)</div><div class="kpi-value">0.547</div><div class="kpi-note warn">SSR 0.52 · höchste ISO-FS</div></div>
+      <div class="kpi"><div class="kpi-label">Story-LLM (S)</div><div class="kpi-value">0.456</div><div class="kpi-note warn">SSR 0.33</div></div>
+      <div class="kpi"><div class="kpi-label">Hybrid (H)</div><div class="kpi-value">0.450</div><div class="kpi-note warn">SSR 0.67 · beste LLM-Execution</div></div>
     </div>
-    <p class="footnote">ISO-FS = Mittel aus Correctness, Completeness, Appropriateness. Einzellauf; die Reihenfolge zwischen den LLM-Pipelines ist bei hoher Varianz noch nicht stabil — das 3er-Aggregat (Mittel ± Std) glättet das.</p>
+    <p class="footnote">ISO Functional Suitability = Mittel aus Correctness, Completeness, Appropriateness. C/S/H liegen praktisch gleichauf (0.45–0.46), L leicht vorn.</p>
   </div>
 
   <div class="section">
     <div class="charts-row">
-      <div class="chart-card">
-        <div class="chart-title">ISO functional suitability ↑</div>
-        <div class="chart-wrap"><canvas id="chart-iso" role="img" aria-label="ISO-FS: Story 0.70, LLM 0.66, Crawler 0.59, Hybrid 0.43"></canvas></div>
-      </div>
-      <div class="chart-card">
-        <div class="chart-title">SSR (Pass-Rate) ↑</div>
-        <div class="chart-wrap"><canvas id="chart-ssr" role="img" aria-label="SSR: Crawler 1.0, Hybrid 0.67, LLM 0.5, Story 0.5"></canvas></div>
-      </div>
-      <div class="chart-card">
-        <div class="chart-title">Halluzination ↓ (korrigiert)</div>
-        <div class="chart-wrap"><canvas id="chart-hall" role="img" aria-label="Hallucination korrigiert: Story 0.0, LLM 0.1, Hybrid 0.2"></canvas></div>
-      </div>
-      <div class="chart-card">
-        <div class="chart-title">Coverage: statisch vs. exercised</div>
-        <div class="chart-wrap"><canvas id="chart-cov" role="img" aria-label="Static vs exercised coverage"></canvas></div>
-        <div class="legend">
-          <span class="legend-item"><span class="legend-dot" style="background:#b5d4f4;"></span>Statisch</span>
-          <span class="legend-item"><span class="legend-dot" style="background:#2a78d6;"></span>Exercised (bestandene Tests)</span>
-        </div>
+      <div class="chart-card"><div class="chart-title">ISO functional suitability ↑</div><div class="chart-wrap"><canvas id="chart-iso"></canvas></div></div>
+      <div class="chart-card"><div class="chart-title">SSR (Pass-Rate) ↑</div><div class="chart-wrap"><canvas id="chart-ssr"></canvas></div></div>
+      <div class="chart-card"><div class="chart-title">Halluzination ↓ (korrigiert)</div><div class="chart-wrap"><canvas id="chart-hall"></canvas></div></div>
+      <div class="chart-card"><div class="chart-title">Coverage: statisch vs. exercised (von 100 entdeckten)</div><div class="chart-wrap"><canvas id="chart-cov"></canvas></div>
+        <div class="legend"><span class="legend-item"><span class="legend-dot" style="background:#b5d4f4;"></span>Statisch</span><span class="legend-item"><span class="legend-dot" style="background:#2a78d6;"></span>Exercised</span></div>
       </div>
     </div>
   </div>
 
   <div class="section">
-    <h2>Metrik × Pipeline</h2>
+    <h2>Metrik × Pipeline (50-Läufe-Mittel)</h2>
     <table class="cmp">
       <tr><th>Metrik</th><th>Crawler</th><th>LLM-only</th><th>Story-LLM</th><th>Hybrid</th></tr>
-      <tr><td>SSR (Pass-Rate) ↑</td><td>1.000</td><td>0.500</td><td>0.500</td><td>0.667</td></tr>
-      <tr><td>Grüne Tests</td><td>5/5</td><td>5/10</td><td>3/6</td><td>4/6</td></tr>
-      <tr><td>ISO Correctness ↑</td><td>0.950</td><td>0.600</td><td>0.750</td><td>0.583</td></tr>
-      <tr><td>ISO Completeness ↑</td><td>0.219</td><td>0.469</td><td>0.344</td><td>0.312</td></tr>
-      <tr><td>ISO Appropriateness ↑</td><td>0.600</td><td>0.900</td><td>1.000</td><td>0.400</td></tr>
-      <tr><td>ISO Functional Suitability ↑</td><td>0.590</td><td>0.656</td><td>0.698</td><td>0.432</td></tr>
-      <tr><td>Halluzination ↓ (korrigiert)</td><td>n/a</td><td>0.10</td><td>0.00</td><td>0.20</td></tr>
+      <tr><td>SSR (Pass-Rate) ↑</td><td class="best">1.000</td><td>0.519</td><td>0.333</td><td>0.667</td></tr>
+      <tr><td>ISO Correctness ↑</td><td class="best">0.900</td><td>0.668</td><td>0.567</td><td>0.639</td></tr>
+      <tr><td>ISO Completeness ↑</td><td>0.090</td><td class="best">0.120</td><td>0.060</td><td>0.090</td></tr>
+      <tr><td>ISO Appropriateness ↑</td><td>0.400</td><td class="best">0.854</td><td>0.742</td><td>0.620</td></tr>
+      <tr><td>ISO Functional Suitability ↑</td><td>0.463</td><td class="best">0.547</td><td>0.456</td><td>0.450</td></tr>
+      <tr><td>Halluzination ↓ (korrigiert)</td><td>n/a</td><td>0.32</td><td>0.04</td><td class="best">0.01</td></tr>
+      <tr><td>Coverage exercised / statisch</td><td>9 / 9</td><td>12 / 33</td><td>6 / 16</td><td>9 / 13</td></tr>
     </table>
   </div>
 
@@ -141,31 +116,31 @@
     <div class="profiles">
       <div class="profile"><div class="profile-title">Crawler (C) · traditionell</div><ul>
         <li class="good">✓ SSR 1.00 · Flakiness 0</li>
-        <li class="good">✓ Correctness 0.95</li>
+        <li class="good">✓ Correctness 0.90</li>
         <li class="good">✓ Deterministisch (1×)</li>
-        <li class="bad">✗ Nur Smoke-Tests</li>
-        <li class="bad">✗ Kein Story-Bezug (Compl. 0.22)</li>
+        <li class="bad">✗ Nur Smoke-Tests (Approp. 0.40)</li>
+        <li class="bad">✗ Kein Story-Bezug</li>
       </ul></div>
       <div class="profile"><div class="profile-title">LLM-only (L) · Methode 1</div><ul>
-        <li class="good">✓ Appropriateness 0.90</li>
-        <li class="good">✓ Exploriert real (In-Process)</li>
-        <li class="good">✓ Halluzination niedrig (0.10)</li>
-        <li class="warn">~ SSR 0.50 (5/10)</li>
-        <li class="bad">✗ erfindet Login-Elemente</li>
+        <li class="good">✓ ISO-FS 0.547 (höchste)</li>
+        <li class="good">✓ Appropriateness 0.854</li>
+        <li class="warn">~ SSR 0.52</li>
+        <li class="bad">✗ Halluzination 0.32 (erfindet Login)</li>
+        <li class="bad">✗ hohe Varianz (Tests 8–14)</li>
       </ul></div>
       <div class="profile"><div class="profile-title">Story-LLM (S) · LLM-only + Story</div><ul>
-        <li class="good">✓ ISO-FS 0.698 (bestes)</li>
-        <li class="good">✓ Appropriateness 1.00</li>
-        <li class="good">✓ Halluzination 0.00</li>
-        <li class="warn">~ SSR 0.50 (3/6)</li>
-        <li class="bad">✗ Testlogik (Dialog-Name, strict-mode)</li>
+        <li class="good">✓ Appropriateness 0.742</li>
+        <li class="good">✓ Halluzination 0.04 (gut geerdet)</li>
+        <li class="warn">~ ISO-FS 0.456</li>
+        <li class="bad">✗ SSR 0.33 (niedrigste)</li>
+        <li class="bad">✗ Testlogik (Dialog, XPath-Bastel)</li>
       </ul></div>
       <div class="profile"><div class="profile-title">Hybrid (H) · Methode 2 (grounded)</div><ul>
-        <li class="good">✓ SSR 0.667 (4/6)</li>
-        <li class="good">✓ nutzt echte Crawler-Locator</li>
-        <li class="good">✓ schnellste LLM-Pipeline (15 s)</li>
-        <li class="bad">✗ Appropriateness 0.40 (CSS/schwache Oracles)</li>
-        <li class="bad">✗ hohe Varianz über Läufe</li>
+        <li class="good">✓ SSR 0.667 (beste LLM-Execution)</li>
+        <li class="good">✓ Halluzination 0.01 (niedrigste)</li>
+        <li class="good">✓ schnellste LLM-Pipeline (14 s)</li>
+        <li class="warn">~ Appropriateness 0.62 (CSS geerbt)</li>
+        <li class="bad">✗ schwache Oracles (body-attached)</li>
       </ul></div>
     </div>
   </div>
@@ -173,95 +148,50 @@
   <div class="section">
     <h2>Kernfindings</h2>
     <div class="finding-grid">
-      <div class="finding fix">
-        <div class="finding-num">Finding 01 · Metrik-Korrektur</div>
-        <div class="finding-head">Halluzination war invertiert</div>
-        <p>G-Eval bewertet „höher = besser". Der Rohscore war Groundedness, wurde aber als Halluzination gespeichert. Widerspruch als Beweis: S hatte Score 1.0 bei Begründung „no invented elements". Nach Korrektur sind die LLM-Pipelines tatsächlich <strong>gut geerdet</strong> (S 0.00, L 0.10, H 0.20) — die frühere „hohe Halluzination" war ein Mess-Artefakt.</p>
-      </div>
-      <div class="finding fix">
-        <div class="finding-num">Finding 02 · Infrastruktur-Bias behoben</div>
-        <div class="finding-head">S=0 war ein Explorations-Bug, keine Halluzination</div>
-        <p>Der frühere S=0.00 kam daher, dass das Playwright-MCP-Backend leere Snapshots lieferte (0 Elemente) → der Agent konnte nur navigieren, nie klicken. Behoben durch das In-Process-Backend (dieselbe DOM-Erfassung wie der Crawler). S exploriert jetzt real bis <code>/#/register</code> und erreicht SSR 0.50 (3/6), ISO-FS 0.698.</p>
-      </div>
-      <div class="finding">
-        <div class="finding-num">Finding 03 · Grounding wirkt</div>
-        <div class="finding-head">Echte Locator statt geraten</div>
-        <p>S nutzt seine <em>eigenen</em> beobachteten Elemente, H den Crawler-Katalog. Beide verwenden jetzt reale Labels (<code>Open search</code>, <code>Add to Basket</code>) statt Rateversuche wie <code>name="Search"</code> oder erfundene <code>data-testid</code>. Das bestätigt die Hybrid-Hypothese: injiziertes Element-Wissen erdet die Generierung.</p>
-      </div>
-      <div class="finding">
-        <div class="finding-num">Finding 04 · Crawler zuverlässig, aber flach</div>
-        <div class="finding-head">Ceiling auf Execution, nicht auf Anforderungen</div>
-        <p>SSR 1.00, Flakiness 0, Correctness 0.95 — aber Completeness 0.22 und Appropriateness 0.60. Alle Tests sind reine Navigations-Smoke-Tests ohne Story-Bezug. Zuverlässigste Ausführungsbasis, verfehlt aber systematisch die Anforderungsabdeckung.</p>
-      </div>
-      <div class="finding">
-        <div class="finding-num">Finding 05 · Restfehler = Testlogik</div>
-        <div class="finding-head">Nicht Infra, sondern LLM-Design</div>
-        <p>Die verbleibenden Fehlschläge sind echte LLM-Schwächen: Dialog per <code>get_by_role("dialog", name=…)</code> obwohl der Dialog keinen accessible name trägt; <code>name="Login"</code> trifft zwei Buttons (strict-mode); Warenkorb-Button-Timing. Das ist genau das, was die Studie misst — plausibler, aber teils fehlerhafter Testcode trotz korrekter Locator.</p>
-      </div>
-      <div class="finding">
-        <div class="finding-num">Finding 06 · Threats to Validity</div>
-        <div class="finding-head">Ehrlich benennen</div>
-        <p>(1) Deterministischer Post-Processor korrigiert ungültige API-Slips (Linter-Niveau) → flacht LLM-Ausführbarkeit leicht. (2) Nur <em>eine</em> Ziel-App → externe Validität begrenzt, zweite App (OpenCart) empfohlen. (3) Ein Judge (GLM) → Agreement-Check mit 2. Modell sinnvoll. (4) Hohe Varianz → Wiederholungen + Std reporten.</p>
-      </div>
+      <div class="finding fix"><div class="finding-num">Finding 01 · Metrik-Korrektur</div><div class="finding-head">Halluzination war invertiert</div>
+        <p>G-Eval wertet „höher = besser". Der Rohscore war faktisch Groundedness, wurde aber als Halluzination gespeichert (Beweis: S Score 1.0 bei Begründung „no invented elements"). Korrigiert sind die geerdeten Pipelines niedrig (H 0.01, S 0.04) und L höher (0.32) — L erfindet Login-Elemente, weil es ohne Story autonom rät.</p></div>
+      <div class="finding fix"><div class="finding-num">Finding 02 · Metrik-Korrektur</div><div class="finding-head">Completeness-Nenner stabilisiert</div>
+        <p>Der Nenner war die Union der exercised Locator über <em>alle 50 Läufe</em> (=165) → wuchs mit der Wiederholungszahl und ließ Completeness auf ~0.05 kollabieren. Jetzt stabiler, rep-unabhängiger Nenner = vom Crawler entdeckte Oberfläche (100 Elemente). Die Rangfolge ist gegenüber beiden Nennern robust.</p></div>
+      <div class="finding"><div class="finding-num">Finding 03 · Grounding wirkt auf Execution</div><div class="finding-head">Hybrid = beste Ausführbarkeit der LLMs</div>
+        <p>H erreicht die höchste LLM-SSR (0.667) und die niedrigste Halluzination (0.01), weil es die realen, vom Crawler verifizierten Locator nutzt. S vs. H (beide story-bewusst): H läuft deutlich zuverlässiger (0.67 vs. 0.33), S hat leicht höhere Appropriateness (0.74 vs. 0.62). Injiziertes Element-Wissen tauscht etwas Judge-Eleganz gegen klare Ausführbarkeit.</p></div>
+      <div class="finding"><div class="finding-num">Finding 04 · Zwei Achsen</div><div class="finding-head">Execution ≠ Judge-Qualität</div>
+        <p>Auf Ausführbarkeit (SSR): C 1.00 &gt; H 0.67 &gt; L 0.52 &gt; S 0.33. Auf ISO-FS: L 0.55 &gt; C 0.46 ≈ S 0.46 ≈ H 0.45. SSR und Appropriateness divergieren — L schreibt autonom „saubere" Tests (hohe Approp.), scheitert aber öfter; H läuft, wird aber für geerbte CSS-Selektoren abgewertet. SSR allein ist irreführend.</p></div>
+      <div class="finding"><div class="finding-num">Finding 05 · Alle Suiten flach</div><div class="finding-head">Geringe Oberflächen-Abdeckung</div>
+        <p>Bestehende Tests berühren nur 6–12 von 100 entdeckten interaktiven Elementen → Completeness 0.06–0.12 durchgängig. Sowohl der Crawler (Smoke-Navigation) als auch die LLM-Pipelines testen nur einen kleinen Ausschnitt der App — ein gemeinsames Limit, kein Alleinstellungsmerkmal einer Pipeline.</p></div>
+      <div class="finding"><div class="finding-num">Finding 06 · Threats to Validity</div><div class="finding-head">Ehrlich benennen</div>
+        <p>(1) Nur <em>eine</em> Ziel-App → externe Validität begrenzt (2. App empfohlen). (2) Ein Judge (GLM) → Agreement-Check sinnvoll. (3) Deterministischer Post-Processor korrigiert ungültige API-Slips (Linter-Niveau) → flacht LLM-Ausführbarkeit leicht. (4) Completeness-Nenner ist eine Design-Entscheidung. (5) Hohe Varianz, v. a. L (Halluzination ±0.26).</p></div>
     </div>
   </div>
 
   <div class="thesis">
     <div class="thesis-label">Kernthese</div>
-    <p>Nach Behebung eines Explorations-Bugs (Agent-Backend) und einer invertierten Halluzinations-Metrik zeigt sich ein konsistentes Bild: Der <strong>traditionelle Crawler</strong> liefert die zuverlässigste Ausführung (SSR 1.0), bleibt aber inhaltlich flach (keine Anforderungsabdeckung). Die <strong>LLM-Pipelines mit Anforderungswissen</strong> (Story-LLM, Hybrid) sind — richtig geerdet — kaum halluzinierend und erzielen die höhere <em>Functional Suitability</em>, scheitern aber noch an <strong>Testdesign-Details</strong> (Locator-Feinheiten, Oracle-Qualität), nicht an Erfindung. Der größte Hebel liegt daher nicht in mehr Crawler-Daten, sondern in konsequentem Element-Grounding plus einem strikteren Assertion-Contract; SSR allein ist irreführend (triviale Tests bestehen), weshalb ISO Functional Suitability als Hauptmaß dient.</p>
+    <p>Über 50 Wiederholungen und nach Korrektur zweier Metrik-Artefakte (invertierte Halluzination, rep-abhängiger Completeness-Nenner) zeigt sich ein konsistentes Bild: Der <strong>traditionelle Crawler</strong> liefert perfekte, aber inhaltlich flache Ausführung (SSR 1.0, aber nur Smoke-Tests). Unter den LLM-Pipelines erzielt der <strong>Hybrid</strong> die beste Ausführbarkeit (SSR 0.67) und die geringste Halluzination (0.01) — injiziertes Crawler-Grounding macht die Generierung lauffähig und erdet sie. Auf der Judge-getriebenen ISO Functional Suitability liegt <strong>LLM-only</strong> knapp vorn (0.55), getragen von hoher Appropriateness, aber mit der höchsten Halluzination (0.32) und geringster Zuverlässigkeit. Die Gesamtabdeckung bleibt bei allen Ansätzen gering (≤12 % der entdeckten Oberfläche). Größter Hebel: konsequentes Element-Grounding plus strengerer Assertion-Contract — nicht mehr Crawler-Daten. SSR und ISO-FS sind komplementär und sollten gemeinsam berichtet werden.</p>
   </div>
 
-  <p class="footnote">Einzellauf-Snapshot; das 3er-Aggregat (Mittel ± Std) firmt die Reihenfolge zwischen den LLM-Pipelines ab. Halluzinationswerte nach Metrik-Korrektur; endgültige Bestätigung über den nächsten Lauf (S sollte ≈0.0 mit „gut geerdet"-Begründung zeigen).</p>
+  <p class="footnote">50-Wiederholungen-Aggregat (Mittelwerte). Halluzination nach Polaritäts-Korrektur; Completeness gegen die stabile, vom Crawler (Tiefe 5) entdeckte Oberfläche (100 Elemente). Reihenfolge robust gegenüber der Nenner-Wahl.</p>
 
 </div>
-
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
 const dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-const grid = dark ? '#2c2c2a' : '#e1e0d9';
-const tick = '#898781';
-const base = {
-  responsive: true, maintainAspectRatio: false,
+const grid = dark ? '#2c2c2a' : '#e1e0d9'; const tick = '#898781';
+const base = { responsive: true, maintainAspectRatio: false,
   plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ' ' + ctx.parsed.y.toFixed(3) } } },
-  scales: {
-    x: { ticks: { color: tick, font: { size: 11 }, autoSkip: false }, grid: { display: false }, border: { color: grid } },
-    y: { ticks: { color: tick, font: { size: 11 }, maxTicksLimit: 5 }, grid: { color: grid }, border: { display: false }, min: 0, max: 1 }
-  }
-};
-new Chart(document.getElementById('chart-iso'), {
-  type: 'bar',
-  data: { labels: ['Story','LLM-only','Crawler','Hybrid'],
-    datasets: [{ data: [0.698,0.656,0.590,0.432], backgroundColor: ['#1baf7a','#eda100','#2a78d6','#e34948'], borderRadius: 4, borderSkipped: 'bottom', barThickness: 32 }] },
-  options: base
-});
-new Chart(document.getElementById('chart-ssr'), {
-  type: 'bar',
-  data: { labels: ['Crawler','Hybrid','LLM-only','Story'],
-    datasets: [{ data: [1.000,0.667,0.500,0.500], backgroundColor: ['#2a78d6','#1baf7a','#eda100','#eda100'], borderRadius: 4, borderSkipped: 'bottom', barThickness: 32 }] },
-  options: base
-});
-new Chart(document.getElementById('chart-hall'), {
-  type: 'bar',
-  data: { labels: ['Story','LLM-only','Hybrid'],
-    datasets: [{ data: [0.00,0.10,0.20], backgroundColor: ['#1baf7a','#1baf7a','#eda100'], borderRadius: 4, borderSkipped: 'bottom', barThickness: 44 }] },
-  options: base
-});
-new Chart(document.getElementById('chart-cov'), {
-  type: 'bar',
-  data: { labels: ['Crawler','LLM-only','Story','Hybrid'],
-    datasets: [
-      { label: 'Statisch', data: [7,32,16,12], backgroundColor: '#b5d4f4', borderRadius: 4, borderSkipped: 'bottom', barThickness: 18 },
-      { label: 'Exercised', data: [7,15,11,10], backgroundColor: '#2a78d6', borderRadius: 4, borderSkipped: 'bottom', barThickness: 18 }
-    ] },
-  options: {
-    responsive: true, maintainAspectRatio: false,
-    plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ' ' + ctx.dataset.label + ': ' + ctx.parsed.y } } },
-    scales: {
-      x: { ticks: { color: tick, font: { size: 11 }, autoSkip: false }, grid: { display: false }, border: { color: grid } },
-      y: { ticks: { color: tick, font: { size: 11 }, maxTicksLimit: 5 }, grid: { color: grid }, border: { display: false }, min: 0 }
-    }
-  }
-});
+  scales: { x: { ticks: { color: tick, font: { size: 11 }, autoSkip: false }, grid: { display: false }, border: { color: grid } },
+    y: { ticks: { color: tick, font: { size: 11 }, maxTicksLimit: 5 }, grid: { color: grid }, border: { display: false }, min: 0, max: 1 } } };
+new Chart(document.getElementById('chart-iso'), { type: 'bar',
+  data: { labels: ['LLM-only','Crawler','Story','Hybrid'], datasets: [{ data: [0.547,0.463,0.456,0.450], backgroundColor: ['#eda100','#2a78d6','#e34948','#1baf7a'], borderRadius: 4, borderSkipped: 'bottom', barThickness: 32 }] }, options: base });
+new Chart(document.getElementById('chart-ssr'), { type: 'bar',
+  data: { labels: ['Crawler','Hybrid','LLM-only','Story'], datasets: [{ data: [1.000,0.667,0.519,0.333], backgroundColor: ['#2a78d6','#1baf7a','#eda100','#e34948'], borderRadius: 4, borderSkipped: 'bottom', barThickness: 32 }] }, options: base });
+new Chart(document.getElementById('chart-hall'), { type: 'bar',
+  data: { labels: ['Hybrid','Story','LLM-only'], datasets: [{ data: [0.008,0.042,0.320], backgroundColor: ['#1baf7a','#1baf7a','#e34948'], borderRadius: 4, borderSkipped: 'bottom', barThickness: 44 }] }, options: base });
+new Chart(document.getElementById('chart-cov'), { type: 'bar',
+  data: { labels: ['Crawler','LLM-only','Story','Hybrid'], datasets: [
+      { label: 'Statisch', data: [9,33,16,13], backgroundColor: '#b5d4f4', borderRadius: 4, borderSkipped: 'bottom', barThickness: 18 },
+      { label: 'Exercised', data: [9,12,6,9], backgroundColor: '#2a78d6', borderRadius: 4, borderSkipped: 'bottom', barThickness: 18 } ] },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ' ' + ctx.dataset.label + ': ' + ctx.parsed.y } } },
+    scales: { x: { ticks: { color: tick, font: { size: 11 }, autoSkip: false }, grid: { display: false }, border: { color: grid } },
+      y: { ticks: { color: tick, font: { size: 11 }, maxTicksLimit: 5 }, grid: { color: grid }, border: { display: false }, min: 0 } } } });
 </script>
 </body>
 </html>

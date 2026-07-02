@@ -12,11 +12,12 @@ Design notes (addressing known metric pitfalls):
 - **Completeness uses *exercised* coverage** (distinct locators in PASSING tests),
   not the static locator count, so hallucinated locators in failing tests do not
   inflate it.
-- The completeness denominator is the **union of distinct locators that any
-  pipeline genuinely exercised** (passing tests), passed in by the orchestrator —
-  a pipeline-neutral "reachable & verified" surface, not a magic constant and not
-  defined solely by the crawler. The crawler's discovered-element count is only a
-  last-resort fallback when nothing was exercised anywhere.
+- The completeness denominator is the **crawler's discovered interactive surface**
+  (rep-independent, representative after a deep crawl), passed in by the
+  orchestrator. An earlier union-of-exercised-locators denominator was rejected
+  because it grows with the repetition count (50 reps of non-deterministic LLM
+  output inflate the union), which collapsed completeness and broke cross-run
+  comparability. The union is kept only as a fallback when no crawler ran.
 - **Executability is continuous** (the pass rate / SSR feeds correctness), not a
   binary 0/1 flag — a suite where 9/10 tests pass scores above one where 1/10
   passes.

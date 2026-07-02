@@ -305,20 +305,23 @@ class ExperimentRunner:
         surface, removing the crawler-as-sole-authority bias. The crawler's
         discovered-element count is only a last-resort fallback (nothing
         exercised anywhere)."""
+        # Stable denominator: the crawler's discovered interactive surface. This is
+        # REP-INDEPENDENT — unlike the union of exercised locators, which grows with
+        # the number of repetitions (50 reps of non-deterministic LLM output produce
+        # many locator variants), which made completeness collapse (~0.05 for all)
+        # and non-comparable across runs with different rep counts. With the deep
+        # crawl the discovered surface is representative, so this is both stable and
+        # fair; the union is kept only as a fallback when no crawler ran.
+        if crawler_in and crawler_script is not None:
+            d = crawler_script.meta.get("discovered_elements")
+            if d:
+                return d
         union: set[str] = set()
         for samples in collected.values():
             for (_s, ex, _j) in samples:
                 if ex is not None:
                     union |= set(ex.exercised_locators)
-        if union:
-            return len(union)
-        # Fallback only when nothing was exercised anywhere: use the crawler's
-        # discovered surface so completeness stays defined.
-        if crawler_in and crawler_script is not None:
-            d = crawler_script.meta.get("discovered_elements")
-            if d:
-                return d
-        return None
+        return len(union) or None
 
     def _aggregate(self, samples, denom, gen_error, pipeline, app_key) -> PipelineResult:
         if not samples:
