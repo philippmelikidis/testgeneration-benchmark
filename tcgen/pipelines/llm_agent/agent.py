@@ -283,27 +283,36 @@ class LLMAgent:
 
     def _maybe_repair(self, code: str, phase: Phase) -> str:
         """One validate+repair round so Skript_L is at least runnable Python."""
-        if not self.settings.agent_repair:
-            return code
-        issues = validate_playwright_code(code)
-        if not issues:
-            return code
-        phase.log("Validierung fand Probleme: " + "; ".join(issues) + " — Repair-Runde")
-        messages: list[Message] = [
-            {"role": "system", "content": REPAIR_SYSTEM},
-            {"role": "user", "content": repair_user_prompt(code, issues)},
-        ]
-        try:
-            repaired = extract_code_block(self.provider.chat(messages))
-        except Exception as exc:  # noqa: BLE001
-            phase.log(f"Repair fehlgeschlagen ({exc}) — behalte Originalskript")
-            return code
-        remaining = validate_playwright_code(repaired)
-        if remaining and len(remaining) >= len(issues):
-            phase.log("Repair brachte keine Verbesserung — behalte Originalskript")
-            return code
-        phase.log(f"Repair angewandt: {len(issues)} -> {len(remaining)} Probleme")
-        return repaired
+        return maybe_repair_code(code, self.provider, self.settings, phase)
+
+
+def maybe_repair_code(code: str, provider: LLMProvider, settings: Settings,
+                      phase: Phase | None = None) -> str:
+    """One validate+repair round so a generated script is at least runnable
+    Python. Shared by the LLM agent (Skript_L/S) and the hybrid refiner
+    (Skript_H) so all LLM pipelines get the identical crash-guard."""
+    phase = phase or NullPhase()
+    if not settings.agent_repair:
+        return code
+    issues = validate_playwright_code(code)
+    if not issues:
+        return code
+    phase.log("Validierung fand Probleme: " + "; ".join(issues) + " — Repair-Runde")
+    messages: list[Message] = [
+        {"role": "system", "content": REPAIR_SYSTEM},
+        {"role": "user", "content": repair_user_prompt(code, issues)},
+    ]
+    try:
+        repaired = extract_code_block(provider.chat(messages))
+    except Exception as exc:  # noqa: BLE001
+        phase.log(f"Repair fehlgeschlagen ({exc}) — behalte Originalskript")
+        return code
+    remaining = validate_playwright_code(repaired)
+    if remaining and len(remaining) >= len(issues):
+        phase.log("Repair brachte keine Verbesserung — behalte Originalskript")
+        return code
+    phase.log(f"Repair angewandt: {len(issues)} -> {len(remaining)} Probleme")
+    return repaired
 
 
 def generate(target: TargetApp, settings: Settings | None = None,

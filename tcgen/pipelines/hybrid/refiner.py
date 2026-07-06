@@ -7,7 +7,7 @@ import time
 from config.settings import Settings, TargetApp, get_settings
 from tcgen.llm import LLMProvider, Message, get_provider
 from tcgen.orchestration.models import GeneratedScript, Pipeline
-from tcgen.pipelines.llm_agent.agent import _story_block
+from tcgen.pipelines.llm_agent.agent import _story_block, maybe_repair_code
 from tcgen.util import extract_code_block, postprocess_playwright_code
 
 REFINER_SYSTEM = """\
@@ -25,8 +25,8 @@ This is grounded generation, not a cosmetic refactor:
 - Prefer the catalog's user-facing locators (get_by_role/label/placeholder/text
   with the labels shown). You MAY reuse the exact locator expressions from
   Skript_C / the catalog verbatim — they are known to work.
-- Write one test function per user story (named after it), plus optional extra
-  flows that the catalog clearly supports.
+- Structure the suite into test functions however you judge appropriate; ensure
+  each user story's behaviour is verified using the catalog. Granularity is up to you.
 
 GROUNDING — hard rules (you have NOT seen the live DOM; the crawler map is your
 only source of truth):
@@ -84,7 +84,7 @@ def _user_prompt(base_url: str, story_block: str, script_c: str,
     return f"""\
 BASE URL: {base_url}
 
-USER STORIES TO VERIFY (one test each):
+USER STORIES TO VERIFY:
 {story_block}
 {domain_section}{routes_section}
 CRAWLER LOCATOR CATALOG (real, verified elements — role "label" -> Playwright locator):
@@ -96,7 +96,7 @@ WORKING EXAMPLE (Skript_C — these locators are known to run against the app):
 ```
 
 Now write the grounded pytest-playwright suite (Skript_H) that verifies the user
-stories using ONLY the routes/locators above. Descriptive, story-referencing names.
+stories using ONLY the routes/locators above. Use descriptive test names.
 """
 
 
@@ -124,7 +124,11 @@ class HybridRefiner:
                 script_c.code, domain_context, catalog=catalog, routes=routes)},
         ]
         reply = self.provider.chat(messages)
-        code = postprocess_playwright_code(extract_code_block(reply))
+        code = extract_code_block(reply)
+        # Same one-shot validate+repair crash-guard that Skript_L/S receive, so a
+        # syntactic defect in H is not mis-read as weaker grounding (fair S vs H).
+        code = maybe_repair_code(code, self.provider, self.settings, phase)
+        code = postprocess_playwright_code(code)
         phase.update(1.0, f"Skript_H erzeugt ({len(code.splitlines())} Zeilen)")
         return GeneratedScript(
             pipeline=Pipeline.HYBRID,

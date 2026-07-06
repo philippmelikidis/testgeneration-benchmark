@@ -46,8 +46,9 @@ single, self-contained Playwright test module in Python (pytest-playwright) that
 covers the main user-facing flows of the application as an end-to-end test suite.
 
 Hard requirements:
-- Produce SEVERAL test functions, one per distinct flow you discovered
-  (e.g. navigation, search, opening a detail view, a form).
+- Decide for yourself how many test functions to write and how to structure the
+  suite; cover the distinct flows you discovered (navigation, search, detail
+  views, forms) in whatever granularity you judge appropriate.
 - Use the function-scoped `page: Page` fixture from pytest-playwright.
 - Import exactly: `from playwright.sync_api import Page, expect`.
 - EVERY test must start with `page.goto("<BASE_URL>")` using the base URL given
@@ -68,7 +69,10 @@ Hard requirements:
   NOT `.to_be_visible()` (the body can read as hidden behind overlays).
 - A locator may match MULTIPLE elements (product cards etc.). Never click or
   `expect(...).to_be_visible()` a multi-match locator (strict-mode error) — use
-  `.first` or `expect(loc).to_have_count(...)`.
+  `.first` or assert the count. For "at least one", use `assert loc.count() > 0`
+  — do NOT invent Playwright methods. ONLY these expect assertions exist:
+  `to_be_visible`, `to_be_attached`, `to_have_count(n)`, `to_have_text(...)`,
+  `to_contain_text(...)`, `to_have_url(...)`. There is NO `to_have_count_greater_than`.
 - A shared test harness already runs automatically: it bounds action timeouts
   and dismisses the welcome dialog / cookie banner after each navigation, so you
   do NOT need to handle those overlays yourself — just navigate and act.
@@ -127,7 +131,7 @@ WHAT YOU OBSERVED WHILE EXPLORING (urls, elements, page text):
 {transcript}
 {_observed_section(observed_block)}
 Now write the complete pytest-playwright end-to-end test suite for this
-application (several test functions). Use descriptive test names.
+application. Use descriptive test names.
 """
 
 
@@ -143,7 +147,8 @@ single, self-contained Playwright test module in Python (pytest-playwright) that
 VERIFIES the given user stories, plus other important flows you discovered.
 
 Hard requirements:
-- One test function per user story (named after it), plus optional extra flows.
+- Structure the suite into test functions however you judge appropriate; ensure
+  the given user stories' behaviour is verified. Naming and granularity are up to you.
 - Use the function-scoped `page: Page` fixture; import exactly
   `from playwright.sync_api import Page, expect`.
 - EVERY test starts with `page.goto("<BASE_URL>")`.
@@ -158,7 +163,10 @@ Hard requirements:
   regex if you check the URL at all. Avoid `body.to_be_visible()`.
 - A locator may match MULTIPLE elements (product cards etc.). Never click or
   `expect(...).to_be_visible()` a multi-match locator (strict-mode error) — use
-  `.first` or `expect(loc).to_have_count(...)`.
+  `.first` or assert the count. For "at least one", use `assert loc.count() > 0`
+  — do NOT invent Playwright methods. ONLY these expect assertions exist:
+  `to_be_visible`, `to_be_attached`, `to_have_count(n)`, `to_have_text(...)`,
+  `to_contain_text(...)`, `to_have_url(...)`. There is NO `to_have_count_greater_than`.
 - A shared harness already dismisses welcome/cookie overlays and bounds timeouts.
 - Output ONLY the Python code in a single ```python fenced block.
 """
@@ -179,14 +187,14 @@ def synthesis_user_prompt_story(base_url: str, story_block: str, transcript: str
     return f"""\
 BASE URL: {base_url}
 
-USER STORIES TO VERIFY (one test each):
+USER STORIES TO VERIFY:
 {story_block}
 
 WHAT YOU OBSERVED WHILE EXPLORING (urls, elements, page text):
 {transcript}
 {_observed_section(observed_block)}
 Now write the complete pytest-playwright test suite that verifies these user
-stories (plus other important flows). Use descriptive, story-referencing names.
+stories (plus other important flows). Use descriptive test names.
 Map each story to the OBSERVED ELEMENTS above (e.g. the search toggle is the
 observed "Open search" button, not a generic "Search"); if a story's element was
 not observed, assert conservatively instead of inventing a selector.
