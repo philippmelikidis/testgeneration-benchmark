@@ -84,6 +84,34 @@ def _register_overlay_handlers(page):
         except Exception:
             pass
 
+    # Angular Material DROPDOWN/MENU overlays (mat-select like "Security Question",
+    # mat-menu) render a *transparent* CDK backdrop that, once open, intercepts the
+    # next click and makes the test time out with "<...> subtree intercepts pointer
+    # events". Press Escape to close the stray dropdown when its backdrop would
+    # block an action. Scoped to `.cdk-overlay-transparent-backdrop` ON PURPOSE:
+    # mat-DIALOGs use a *dark* backdrop (`.cdk-overlay-dark-backdrop`) and are left
+    # untouched, so tests that legitimately keep a product/detail dialog open are
+    # not disrupted. Harness-level -> applied identically to every pipeline.
+    def _esc_handler(*_a):
+        try:
+            page.keyboard.press("Escape")
+        except Exception:
+            pass
+
+    try:
+        page.add_locator_handler(
+            page.locator(".cdk-overlay-transparent-backdrop"),
+            _esc_handler, no_wait_after=True, times=3,
+        )
+    except TypeError:
+        try:
+            page.add_locator_handler(
+                page.locator(".cdk-overlay-transparent-backdrop"), _esc_handler)
+        except Exception:
+            pass
+    except Exception:
+        pass
+
 
 # Disable CSS animations/transitions so Material ripples and route transitions
 # don't leave elements "unstable" (Playwright then retries a click until timeout
@@ -121,10 +149,35 @@ _PREDISMISS_JS = """
 """
 
 
+# Juice Shop leaves the DISMISSED cookie-consent banner in the DOM as a hidden
+# `<div role="dialog" aria-label="cookieconsent" class="cc-window cc-invisible">`.
+# That ghost node collides with EVERY dialog query — `get_by_role("dialog")` and
+# `page.locator("[role=dialog]").first` resolve to it (hidden) instead of the real
+# product/detail dialog, so the assertion times out on "hidden". The banner is
+# already dismissed (see _PREDISMISS_JS); removing its leftover node is cleanup of
+# an already-dismissed overlay, applied identically to every pipeline — it removes
+# spurious noise, it does not favour any generation strategy.
+_KILL_COOKIECONSENT_JS = """
+(() => {{
+  const kill = () => document.querySelectorAll(
+    '.cc-window, [aria-label="cookieconsent"]').forEach((n) => n.remove());
+  const start = () => {{
+    kill();
+    try {{
+      new MutationObserver(kill).observe(
+        document.documentElement, {{childList: true, subtree: true}});
+    }} catch (e) {{}}
+  }};
+  if (document.documentElement) start();
+  else document.addEventListener('DOMContentLoaded', start);
+}})();
+"""
+
+
 @pytest.fixture(autouse=True)
 def _harness(page):
     page.set_default_timeout({timeout})
-    for _script in (_PREDISMISS_JS, _NO_ANIM_JS):
+    for _script in (_PREDISMISS_JS, _KILL_COOKIECONSENT_JS, _NO_ANIM_JS):
         try:
             page.add_init_script(_script)
         except Exception:
@@ -180,6 +233,8 @@ class TestRunner:
             exercised_locators=sorted(exercised),
             flakiness=self._flakiness(runs),
             first_error=first.get("first_error"),
+            failures=first.get("failures", {}),
+            passed_functions=sorted(passed_fns),
             stdout=first["stdout"][-4000:],
             stderr=first["stderr"][-4000:],
         )
@@ -220,8 +275,17 @@ class TestRunner:
         # (pytest + the chromium it spawned). With plain subprocess.run(timeout=)
         # only the direct child is killed; the browser keeps the stdout pipe open
         # and the call blocks far beyond the timeout (the "20-minute run").
+        #
+        # stdin=DEVNULL is CRITICAL: the Streamlit background worker runs detached,
+        # so its own stdin (fd 0) is closed/invalid. Without this, the pytest child
+        # INHERITS that broken fd 0 and Python aborts at startup with
+        # "Fatal Python error: init_sys_streams: can't initialize sys standard
+        # streams / OSError: [Errno 9] Bad file descriptor" — intermittently, which
+        # silently tanks SSR over many runs. Giving the child a real /dev/null stdin
+        # fixes it deterministically.
         proc = subprocess.Popen(
-            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            cmd, stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
             cwd=str(GENERATED_DIR.parent), start_new_session=True,
         )
         try:
@@ -258,7 +322,7 @@ class TestRunner:
     @staticmethod
     def _parse_report(report: Path) -> dict:
         base = {"executed": False, "n_tests": 0, "n_passed": 0, "n_failed": 0,
-                "duration": 0.0, "outcomes": {}, "first_error": None}
+                "duration": 0.0, "outcomes": {}, "first_error": None, "failures": {}}
         if not report.exists():
             return base
         try:
@@ -276,6 +340,7 @@ class TestRunner:
             "duration": data.get("duration", 0.0),
             "outcomes": outcomes,
             "first_error": _first_failure_message(tests),
+            "failures": _per_test_failures(tests),
         }
 
     @staticmethod
@@ -306,3 +371,32 @@ def _first_failure_message(tests: list[dict]) -> str | None:
                 node = t.get("nodeid", "").split("::")[-1]
                 return f"{node}: {str(msg).strip().splitlines()[-1][:400]}"
     return None
+
+
+def _per_test_failures(tests: list[dict]) -> dict[str, str]:
+    """Map each failing test FUNCTION -> a short real error message.
+
+    Feeds the execute-verify-repair loop: the LLM is asked to fix exactly these
+    functions against their actual Playwright error, instead of guessing blind.
+    The message is the last few lines of the crash/longrepr (where the concrete
+    Playwright error — 'strict mode violation', 'Timeout ... waiting for locator',
+    'expected to be visible' — lives), trimmed to keep the repair prompt compact.
+    """
+    out: dict[str, str] = {}
+    for t in tests:
+        if t.get("outcome") not in ("failed", "error"):
+            continue
+        fn = t.get("nodeid", "").split("::")[-1].split("[")[0]
+        if not fn or fn in out:
+            continue
+        msg = None
+        for phase in ("call", "setup", "teardown"):
+            info = t.get(phase) or {}
+            crash = info.get("crash") or {}
+            msg = crash.get("message") or info.get("longrepr")
+            if msg:
+                break
+        if msg:
+            lines = [ln for ln in str(msg).strip().splitlines() if ln.strip()]
+            out[fn] = "\n".join(lines[-6:])[:600]
+    return out

@@ -198,6 +198,36 @@ class ElementDescriptor:
         # last resort
         return f'{page}.locator({_q(self.tag)}).first'
 
+    def catalog_locator_code(self, page: str = "page") -> str:
+        """Robust, user-facing locator for the GROUNDING catalog handed to Skript_H.
+
+        Differs from :meth:`locator_code` on purpose: that one prefers the exact
+        harvested CSS path so the crawler's OWN replay clicks the identical node
+        (keeping Skript_C green). But that same nth-of-type CSS chain (e.g.
+        ``mat-card > article > section > div:nth-of-type(2) > div`` for a product
+        tile) is brittle grounding — when Skript_H faithfully reuses it, the
+        assertion breaks. For grounding we therefore prefer a semantic/text
+        locator and fall back to CSS only when there is no usable name/text.
+        """
+        if self.testid:
+            return f'{page}.get_by_test_id({_q(self.testid)})'
+        name = self.accessible_name
+        if self.is_input:
+            if self.placeholder:
+                return f'{page}.get_by_placeholder({_q(self.placeholder)})'
+            if name:
+                return f'{page}.get_by_role("textbox", name={_q(name)})'
+            if self.id:
+                return f'{page}.locator({_q("#" + self.id)})'
+        if name and self.aria_role != "generic":
+            return f'{page}.get_by_role({_q(self.aria_role)}, name={_q(name)}).first'
+        text = (self.text or name).strip()
+        if 0 < len(text) <= 60:
+            return f'{page}.get_by_text({_q(text)}, exact=False).first'
+        if self.id:
+            return f'{page}.locator({_q("#" + self.id)})'
+        return self.locator_code(page)  # last resort: exact CSS path
+
 
 def _q(s: str) -> str:
     """Quote a string for embedding in generated Python source."""

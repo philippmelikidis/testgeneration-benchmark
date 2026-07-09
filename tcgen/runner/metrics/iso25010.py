@@ -49,9 +49,18 @@ def map_to_iso(
     # --- Functional Correctness: assertions hold (continuous pass rate) + judge ---
     correctness = _mean(judge.correctness, execution.ssr)
 
-    # --- Functional Completeness: exercised share of the reachable surface ---
-    if coverage_denominator and coverage_denominator > 0:
-        completeness: float | None = round(
+    # --- Functional Completeness ---
+    # Primary: REQUIREMENT coverage — the share of the specified user stories that
+    # a passing test actually verifies (ISO's "covers all specified tasks and user
+    # objectives"). This replaces "share of every element in the whole app", which
+    # structurally floored a focused suite (a 6-story suite can never touch all ~73
+    # discovered affordances). Falls back to exercised-surface coverage only when
+    # the target declares no story signatures.
+    completeness: float | None
+    if execution.story_total:
+        completeness = round(execution.story_covered / execution.story_total, 4)
+    elif coverage_denominator and coverage_denominator > 0:
+        completeness = round(
             min(execution.exercised_coverage / coverage_denominator, 1.0), 4
         )
     else:

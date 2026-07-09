@@ -79,6 +79,19 @@ class ExecutionResult(BaseModel):
     # Message of the first failing/erroring test (from the pytest report) so the
     # real cause is visible without digging through stdout.
     first_error: str | None = None
+    # Per-failing-test error messages {test_function: short_message}. Feeds the
+    # runtime execute-verify-repair loop (fix exactly the tests that failed,
+    # against their real Playwright error). Transient; not central to the record.
+    failures: dict[str, str] = Field(default_factory=dict)
+    # Names of test functions that PASSED — lets the orchestrator compute
+    # requirement-based completeness (which user stories a passing test verifies).
+    passed_functions: list[str] = Field(default_factory=list)
+    # Requirement-based functional completeness inputs: how many of the target's
+    # user stories a passing test actually verifies, out of the total. Set by the
+    # orchestrator after execution; None when the target defines no story
+    # signatures (then ISO completeness falls back to exercised-surface coverage).
+    story_covered: float | None = None  # int per run; mean (float) across reps
+    story_total: int | None = None
     stdout: str = ""
     stderr: str = ""
 

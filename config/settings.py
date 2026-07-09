@@ -68,7 +68,14 @@ class Settings(BaseSettings):
     # AFTER their reasoning tokens; too small truncates the script to nothing.
     llm_max_tokens: int = 8192
     agent_max_steps: int = 25
-    agent_repair: bool = True            # one validate+repair round on Skript_L
+    agent_repair: bool = True            # one static validate+repair round (syntax)
+    # Execute-verify-repair: after synthesis, RUN the LLM suite, feed each failing
+    # test's real Playwright error back to the model, fix exactly those tests, and
+    # re-run — keeping the best-SSR version. This is what closes the gap between
+    # "blind one-shot generation" (tests guess names/pagination and go red) and how
+    # a developer/agentic tool actually authors tests. Applied identically to every
+    # LLM pipeline (L/S/H); the deterministic crawler is exempt. 0 disables it.
+    runtime_repair_rounds: int = 2
     # --- agent browser backend ---
     # "playwright_mcp": explore via the official Microsoft Playwright MCP server
     # (@playwright/mcp, requires Node 18+/npx); "inprocess": the bundled
@@ -145,6 +152,12 @@ class UserStory(BaseModel):
     title: str
     text: str
     acceptance_criteria: list[str] = Field(default_factory=list)
+    # Signature UI elements (real accessible names/texts) that a PASSING test must
+    # reference to count as verifying this story. Used for requirement-based
+    # functional completeness: a story is "covered" iff some passing test contains
+    # ALL of these substrings. Kept in the target config (transparent, auditable)
+    # rather than hard-coded, and applied identically to every pipeline.
+    key_elements: list[str] = Field(default_factory=list)
 
 
 class TargetApp(BaseModel):

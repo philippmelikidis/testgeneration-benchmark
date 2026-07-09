@@ -8,9 +8,15 @@ description: >
   stateful Web UI with hash routing, dialogs, and a cookie/welcome banner; good
   stress test for both pipelines. Boots ready, which keeps runs reproducible.
 
-username: null
-password: null
+# Pre-registered test account (create it once in the running Juice Shop). A shared
+# test fixture, given IDENTICALLY to every pipeline: the login/basket stories
+# (US-5/6/7) require an existing account, so without real credentials the model
+# invents a non-existent login that always fails. Not a per-pipeline advantage.
+username: "test@juice.sh"
+password: "Test1234!"
 
+# SINGLE start point for every pipeline (fair comparison): each strategy must
+# discover deeper routes (login/register behind the account menu) on its own.
 entry_paths:
   - "/#/"
   - "/#/search"
@@ -37,6 +43,8 @@ user_stories:
       - "Über das Such-Icon im Header lässt sich ein Suchfeld öffnen."
       - "Eine Suche nach 'Apple' liefert eine Ergebnisliste mit Produktkacheln."
       - "Die Ergebnisse enthalten mindestens eine Produktkarte."
+    # A passing test verifies US-1 iff it references the search toggle.
+    key_elements: ["Open search"]
 
   - id: "US-2"
     title: "Produktdetails öffnen"
@@ -47,6 +55,7 @@ user_stories:
       - "Ein Klick auf eine Produktkarte öffnet einen Detail-Dialog."
       - "Der Dialog zeigt Produktname und Preis."
       - "Der Dialog lässt sich wieder schließen."
+    key_elements: ["Click for more information about the product"]
 
   - id: "US-3"
     title: "Konto registrieren"
@@ -57,6 +66,7 @@ user_stories:
       - "Die Registrierung ist über einen Link/Menüpunkt erreichbar."
       - "Pflichtfelder E-Mail, Passwort und Passwort-Wiederholung sind vorhanden."
       - "Eine Sicherheitsfrage muss ausgewählt werden."
+    key_elements: ["Security Question"]
 
   # (US-4 „Cookie-/Willkommens-Banner schließen" entfernt: der gemeinsame
   #  Test-Harness setzt den Dismiss-Status vorab, sodass die Banner gar nicht
@@ -73,6 +83,7 @@ user_stories:
       - "Die Formularfelder für E-Mail und Passwort sind vorhanden."
       - "Nach gültiger Eingabe wird der Nutzer angemeldet und zur Shop-Ansicht weitergeleitet."
       - "Der Header zeigt das Konto-Icon oder einen Account-Namen als Anmeldebestätigung."
+    key_elements: ["Text field for the login email"]
 
   - id: "US-6"
     title: "Artikel in den Warenkorb legen"
@@ -84,6 +95,7 @@ user_stories:
       - "Der 'In den Warenkorb'-Button ist auf einer Produktkarte klickbar."
       - "Nach dem Klick erscheint eine Bestätigungsmeldung."
       - "Das Warenkorb-Icon im Header zeigt mindestens 1 Artikel an."
+    key_elements: ["Add to Basket"]
 
   - id: "US-7"
     title: "Vollständiger Einkaufsprozess"
@@ -97,3 +109,5 @@ user_stories:
       - "Ein Klick auf die Produktkarte öffnet den Detail-Dialog mit Name und Preis."
       - "Über den Detail-Dialog lässt sich das Produkt in den Warenkorb legen."
       - "Der Warenkorb-Zähler im Header erhöht sich auf mindestens 1."
+    # Full flow: ONE passing test must exercise both search and add-to-basket.
+    key_elements: ["Open search", "Add to Basket"]

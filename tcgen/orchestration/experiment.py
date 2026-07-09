@@ -71,6 +71,13 @@ class ExperimentRunner:
         self.runner = TestRunner(self.settings)
         self.evaluate = evaluate
         self.store = ResultsStore()
+        self._provider = None  # lazy shared LLM provider for the runtime-repair loop
+
+    def _get_provider(self):
+        if self._provider is None:
+            from tcgen.llm import get_provider
+            self._provider = get_provider(self.settings)
+        return self._provider
 
     def run(
         self,
@@ -160,7 +167,7 @@ class ExperimentRunner:
                     continue
                 ex = jd = None
                 if self.evaluate:
-                    ex = self._execute(script, progress, label, tag)
+                    ex = self._execute(script, pipeline, target, progress, label, tag)
                     jd = self._judge(script, pipeline, target, progress, label, tag)
                 samples.append((script, ex, jd))
             collected[pipeline] = samples
@@ -258,17 +265,48 @@ class ExperimentRunner:
                                    domain_context=domain_context, phase=ph)
         raise ValueError(f"Unknown pipeline {pipeline!r}")
 
-    def _execute(self, script, progress, label, tag):
+    def _execute(self, script, pipeline, target, progress, label, tag):
         ph = progress.phase(1, f"{label}: Ausführung {tag}")
         if not script.code.strip():
             ph.log("leeres Skript — Ausführung übersprungen")
             return ExecutionResult(first_error="leeres Skript (LLM lieferte keinen Code)")
         try:
-            return self.runner.run(script, phase=ph)
+            ex = self.runner.run(script, phase=ph)
         except Exception as exc:  # noqa: BLE001
             ph.log(f"FEHLER Ausführung {label}: {exc}")
             log.exception("Execution failed for %s", label)
             return ExecutionResult(first_error=str(exc))
+        # Execute-verify-repair: only the non-deterministic LLM pipelines, and only
+        # if they actually ran with failures. The crawler is deterministic and
+        # exempt (keeps it the clean, untouched baseline). Fixes each red test
+        # against its REAL Playwright error — the single biggest SSR lever.
+        rounds = getattr(self.settings, "runtime_repair_rounds", 0)
+        if (pipeline is not Pipeline.CRAWLER and rounds > 0
+                and ex.executed and ex.n_failed > 0):
+            try:
+                from tcgen.pipelines.runtime_repair import runtime_repair
+                script, ex = runtime_repair(
+                    script, target, self.runner, self._get_provider(), self.settings,
+                    initial_exec=ex, app_surface=getattr(self, "_app_context", ""),
+                    max_rounds=rounds, phase=ph)
+            except Exception as exc:  # noqa: BLE001
+                ph.log(f"Laufzeit-Repair übersprungen ({exc})")
+                log.exception("Runtime repair failed for %s", label)
+        # Requirement-based completeness: how many user stories a PASSING test in
+        # the FINAL (post-repair) suite actually verifies. Uniform across pipelines
+        # (crawler/LLM alike); measured only if the target declares story
+        # signatures, else ISO completeness falls back to surface coverage.
+        try:
+            from tcgen.runner.metrics import objective
+            key_elements = [s.key_elements for s in target.user_stories]
+            if any(key_elements):
+                covered, total = objective.story_coverage(
+                    script.code, set(ex.passed_functions), key_elements)
+                ex.story_covered, ex.story_total = covered, total
+                ph.log(f"Story-Abdeckung: {covered}/{total} verifiziert")
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Story coverage computation failed for %s: %s", label, exc)
+        return ex
 
     def _judge(self, script, pipeline, target, progress, label, tag):
         ph = progress.phase(1, f"{label}: Bewertung {tag}")
@@ -305,14 +343,25 @@ class ExperimentRunner:
         surface, removing the crawler-as-sole-authority bias. The crawler's
         discovered-element count is only a last-resort fallback (nothing
         exercised anywhere)."""
-        # Stable denominator: the crawler's discovered interactive surface. This is
-        # REP-INDEPENDENT — unlike the union of exercised locators, which grows with
-        # the number of repetitions (50 reps of non-deterministic LLM output produce
-        # many locator variants), which made completeness collapse (~0.05 for all)
-        # and non-comparable across runs with different rep counts. With the deep
-        # crawl the discovered surface is representative, so this is both stable and
-        # fair; the union is kept only as a fallback when no crawler ran.
+        # Stable, FAIR denominator: the number of DISTINCT user-facing UI
+        # affordances the crawler catalogued — i.e. distinct (role, label) pairs,
+        # not raw DOM-node signatures. `discovered_elements` counted every distinct
+        # DOM node (e.g. the items-per-page value "15" harvested as five different
+        # nth-of-type nodes, every product tile, decorative generics), inflating the
+        # denominator to ~95 and crushing completeness to ~0.08 for ALL pipelines,
+        # including the crawler baseline itself. Collapsing to distinct affordances
+        # (~25-30) measures "share of the app's real interactive surface covered",
+        # is REP-INDEPENDENT (unlike the exercised-locator union, which balloons
+        # over 50 reps), and is comparable across runs. The union is kept only as a
+        # fallback when no crawler ran.
         if crawler_in and crawler_script is not None:
+            catalog = crawler_script.meta.get("locator_catalog") or []
+            affordances = {
+                (c.get("role") or "", (c.get("label") or "").strip().lower())
+                for c in catalog if (c.get("label") or "").strip()
+            }
+            if affordances:
+                return len(affordances)
             d = crawler_script.meta.get("discovered_elements")
             if d:
                 return d

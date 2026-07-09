@@ -90,6 +90,10 @@ class Crawler:
         # signature -> action path from root
         paths: dict[str, list[Action]] = {}
 
+        # SINGLE root — identical starting point for every pipeline (crawler and
+        # LLM agent alike), so the comparison stays fair: each strategy must
+        # DISCOVER deeper states (login/register behind the account menu) by its
+        # own autonomous exploration, none is hand-fed seeded entry points.
         start_url = urljoin(self.target.base_url + "/", self.target.entry_paths[0].lstrip("/"))
         root_path = [Action(kind="goto", url=start_url)]
 
@@ -187,7 +191,9 @@ class Crawler:
                 # mailto/tel, avoided substrings) so they never enter grounding.
                 if el.tag == "a" and not self._followable_link(el.href):
                     continue
-                loc = el.locator_code("page")
+                # Robust, user-facing locator for GROUNDING (text/role over brittle
+                # nth-of-type CSS) so Skript_H doesn't inherit fragile selectors.
+                loc = el.catalog_locator_code("page")
                 if loc in seen:
                     continue
                 seen.add(loc)

@@ -87,6 +87,13 @@ def validate_playwright_code(code: str) -> list[str]:
     return issues
 
 
+# Non-waiting `assert <loc>.count() > 0` / `>= 1` — a common LLM idiom for "at
+# least one result". `.count()` returns immediately, so on async-rendered content
+# (search results, product cards) it reads 0 before the DOM updates and the test
+# fails spuriously. Rewritten to a WAITING assertion on the first match.
+_ASSERT_COUNT_RE = re.compile(
+    r"""^(?P<indent>[ \t]*)assert\s+(?P<loc>.+?)\.count\(\)\s*(?:>\s*0|>=\s*1)\s*$""",
+    re.MULTILINE)
 _COUNT_GT_RE = re.compile(
     r"""expect\(\s*(?P<loc>.+?)\s*\)\.to_have_count_greater_than\(\s*(?P<n>\d+)\s*\)""")
 # Invented "at least N" variants of to_have_count, e.g.
@@ -112,6 +119,8 @@ def postprocess_playwright_code(code: str) -> str:
     # NOT wait and returns 0 before the SPA renders.
     code = _COUNT_GT_RE.sub(r"expect((\g<loc>).first).to_be_visible()", code)
     code = _COUNT_MIN_RE.sub(r"expect((\g<loc>).first).to_be_visible()", code)
+    code = _ASSERT_COUNT_RE.sub(
+        r"\g<indent>expect((\g<loc>).first).to_be_visible()", code)
     # Missing `import re` (models use re.compile for name=... regex locators).
     if re.search(r"\bre\.", code) and not re.search(r"^\s*import re\b", code, re.MULTILINE):
         lines = code.splitlines()

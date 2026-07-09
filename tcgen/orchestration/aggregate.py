@@ -102,6 +102,10 @@ def mean_execution(execs: list[ExecutionResult]) -> ExecutionResult:
     union_locators: set[str] = set()
     for e in execs:
         union_locators |= set(e.exercised_locators)
+    # Requirement-based completeness: mean stories covered (total is constant).
+    covered_vals = [e.story_covered for e in execs if e.story_covered is not None]
+    story_total = next((e.story_total for e in execs if e.story_total), None)
+    story_covered = round(_avg(covered_vals), 4) if covered_vals else None
     return ExecutionResult(
         executed=any(e.executed for e in execs),
         passed=sum(1 for e in execs if e.passed) * 2 >= len(execs),  # majority green
@@ -117,6 +121,8 @@ def mean_execution(execs: list[ExecutionResult]) -> ExecutionResult:
         exercised_locators=sorted(union_locators),
         flakiness=round(avg("flakiness"), 4),
         first_error=next((e.first_error for e in execs if e.first_error), None),
+        story_covered=story_covered,
+        story_total=story_total,
         stdout=execs[0].stdout,
         stderr=execs[0].stderr,
     )

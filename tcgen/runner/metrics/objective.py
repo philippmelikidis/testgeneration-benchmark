@@ -78,6 +78,42 @@ def test_function_names(code: str) -> list[str]:
     return _TESTFN_RE.findall(code)
 
 
+def _passing_bodies(code: str, passed_functions: set[str]) -> list[str]:
+    """Return the source bodies of the test functions that passed (lower-cased)."""
+    defs = [(m.group(1), m.start()) for m in _TESTFN_RE.finditer(code)]
+    bodies: list[str] = []
+    for i, (name, start) in enumerate(defs):
+        if name not in passed_functions:
+            continue
+        end = defs[i + 1][1] if i + 1 < len(defs) else len(code)
+        bodies.append(code[start:end].lower())
+    return bodies
+
+
+def story_coverage(code: str, passed_functions: set[str],
+                   story_key_elements: list[list[str]]) -> tuple[int, int]:
+    """Requirement-based functional completeness.
+
+    Returns ``(covered, total)`` where a user story counts as *covered* iff some
+    PASSING test references ALL of the story's signature elements (case-insensitive
+    substrings — the real accessible names the app exposes). This measures the
+    ISO/IEC 25010 sense of completeness — "share of the specified user objectives
+    covered" — instead of "share of every element in the whole app", and is
+    applied identically to every pipeline. Stories with no declared signatures are
+    excluded from the total (they cannot be measured objectively).
+    """
+    measurable = [ke for ke in story_key_elements if ke]
+    if not measurable:
+        return 0, 0
+    bodies = _passing_bodies(code, passed_functions)
+    covered = 0
+    for keys in measurable:
+        needles = [k.lower() for k in keys]
+        if any(all(n in body for n in needles) for body in bodies):
+            covered += 1
+    return covered, len(measurable)
+
+
 def successful_steps_ratio(n_passed: int, n_tests: int) -> float:
     """SSR at test-case granularity: passed / total (0.0 if no tests)."""
     return round(n_passed / n_tests, 4) if n_tests else 0.0

@@ -8,6 +8,7 @@ from config.settings import Settings, TargetApp, get_settings
 from tcgen.llm import LLMProvider, Message, get_provider
 from tcgen.orchestration.models import GeneratedScript, Pipeline
 from tcgen.pipelines.llm_agent.agent import _story_block, maybe_repair_code
+from tcgen.pipelines.llm_agent.prompts import _credentials_section
 from tcgen.util import extract_code_block, postprocess_playwright_code
 
 REFINER_SYSTEM = """\
@@ -40,8 +41,9 @@ only source of truth):
   substring/regex check if you assert the URL at all.
 - A locator may match MULTIPLE elements (e.g. `mat-card`, product cards). Never
   call `.click()`/`expect(...).to_be_visible()` on a multi-match locator (it
-  raises a strict-mode error). Use `.first` (e.g. `loc.first`) or assert the
-  count. For "at least one", use `assert loc.count() > 0` — do NOT invent
+  raises a strict-mode error). Use `.first` (e.g. `loc.first`). For "at least
+  one", use `expect(loc.first).to_be_visible()` — NEVER a bare `loc.count()` (it
+  does not wait and reads 0 before async content renders). Do NOT invent
   Playwright methods. ONLY these expect assertions exist: `to_be_visible`,
   `to_be_attached`, `to_have_count(n)`, `to_have_text(...)`, `to_contain_text(...)`,
   `to_have_url(...)`. There is NO `to_have_count_greater_than`.
@@ -71,7 +73,8 @@ def _format_catalog(catalog: list[dict], limit: int = 120) -> str:
 
 def _user_prompt(base_url: str, story_block: str, script_c: str,
                  domain_context: str = "", catalog: list[dict] | None = None,
-                 routes: list[str] | None = None) -> str:
+                 routes: list[str] | None = None,
+                 credentials: tuple[str, str] | None = None) -> str:
     domain = domain_context.strip()
     domain_section = (
         f"\nDOMAIN / EXPERT CONTEXT (use to make assertions more meaningful):\n{domain}\n"
@@ -86,7 +89,7 @@ BASE URL: {base_url}
 
 USER STORIES TO VERIFY:
 {story_block}
-{domain_section}{routes_section}
+{domain_section}{routes_section}{_credentials_section(credentials)}
 CRAWLER LOCATOR CATALOG (real, verified elements — role "label" -> Playwright locator):
 {_format_catalog(catalog or [])}
 
@@ -121,7 +124,9 @@ class HybridRefiner:
             {"role": "system", "content": REFINER_SYSTEM},
             {"role": "user", "content": _user_prompt(
                 self.target.base_url, _story_block(self.target.user_stories),
-                script_c.code, domain_context, catalog=catalog, routes=routes)},
+                script_c.code, domain_context, catalog=catalog, routes=routes,
+                credentials=((self.target.username, self.target.password)
+                             if self.target.username and self.target.password else None))},
         ]
         reply = self.provider.chat(messages)
         code = extract_code_block(reply)
@@ -129,13 +134,19 @@ class HybridRefiner:
         # syntactic defect in H is not mis-read as weaker grounding (fair S vs H).
         code = maybe_repair_code(code, self.provider, self.settings, phase)
         code = postprocess_playwright_code(code)
-        phase.update(1.0, f"Skript_H erzeugt ({len(code.splitlines())} Zeilen)")
+        # Methode 2's generation cost is NOT just the refiner LLM call: Skript_H
+        # depends on the crawler's exploration (state graph + locator catalog) as
+        # its input, so a fair generation-time comparison must include the crawl.
+        refine_time = round(time.time() - t0, 2)
+        crawl_time = float(script_c.meta.get("crawl_time_s") or 0.0)
+        phase.update(1.0, f"Skript_H erzeugt ({len(code.splitlines())} Zeilen; "
+                          f"Crawl {crawl_time:.0f}s + Refine {refine_time:.0f}s)")
         return GeneratedScript(
             pipeline=Pipeline.HYBRID,
             app_key=self.target.key,
             language="python",
             code=code,
-            generation_time_s=round(time.time() - t0, 2),
+            generation_time_s=round(refine_time + crawl_time, 2),
             model=self.provider.model,
             provider=self.provider.name,
             meta={
@@ -144,6 +155,9 @@ class HybridRefiner:
                 "domain_context_used": bool(domain_context.strip()),
                 "grounded_locators": len(catalog),
                 "grounded_routes": len(routes),
+                # Transparency: the two components of the reported generation time.
+                "exploration_time_s": crawl_time,
+                "refine_time_s": refine_time,
             },
         )
 

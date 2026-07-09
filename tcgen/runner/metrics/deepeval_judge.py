@@ -174,22 +174,36 @@ class DeepEvalJudge:
         n = max(len(items), 1)
         for i, (key, criteria) in enumerate(items):
             phase.update(i / n, f"Judge: {key}")
-            try:
-                metric = GEval(name=key, criteria=criteria,
-                               evaluation_params=params, model=model)
-                metric.measure(test_case)
-                score = float(metric.score)
-                # The hallucination criterion is phrased as GROUNDEDNESS (G-Eval
-                # scores higher = better). Invert so the stored value is a real
-                # hallucination score: higher = MORE invented references = worse.
-                if key == "hallucination":
-                    score = 1.0 - score
-                scores[key] = round(score, 4)
-                reasons[key] = (metric.reason or "")[:500]
-            except Exception as exc:  # noqa: BLE001
-                log.warning("Judge metric %r failed: %s", key, exc)
+            # G-Eval asks the judge model to emit JSON; thinking models (glm) now
+            # and then return malformed JSON ("Evaluation LLM outputted an invalid
+            # JSON"). That is a transient sampling failure, so retry once before
+            # recording the metric as n/a — otherwise a single bad sample silently
+            # drops a whole dimension (e.g. appropriateness) and skews the mean.
+            last_exc = None
+            for attempt in range(2):
+                try:
+                    metric = GEval(name=key, criteria=criteria,
+                                   evaluation_params=params, model=model)
+                    metric.measure(test_case)
+                    score = float(metric.score)
+                    # The hallucination criterion is phrased as GROUNDEDNESS (G-Eval
+                    # scores higher = better). Invert so the stored value is a real
+                    # hallucination score: higher = MORE invented references = worse.
+                    if key == "hallucination":
+                        score = 1.0 - score
+                    scores[key] = round(score, 4)
+                    reasons[key] = (metric.reason or "")[:500]
+                    last_exc = None
+                    break
+                except Exception as exc:  # noqa: BLE001
+                    last_exc = exc
+                    if attempt == 0:
+                        log.info("Judge metric %r attempt 1 failed (%s) — retrying",
+                                 key, exc)
+            if last_exc is not None:
+                log.warning("Judge metric %r failed after retry: %s", key, last_exc)
                 scores[key] = None
-                reasons[key] = f"error: {exc}"
+                reasons[key] = f"error: {last_exc}"
 
         phase.update(1.0, "Judge fertig")
         return JudgeScores(

@@ -253,13 +253,16 @@ class LLMAgent:
     def _synthesize(self, transcript: str, story_block: str | None = None,
                     observed: list[str] | None = None) -> str:
         observed_block = self._format_observed(observed)
+        creds = ((self.target.username, self.target.password)
+                 if self.target.username and self.target.password else None)
         if story_block:
             system = SYNTHESIS_SYSTEM_STORY
             user = synthesis_user_prompt_story(self.target.base_url, story_block,
-                                               transcript, observed_block)
+                                               transcript, observed_block, credentials=creds)
         else:
             system = SYNTHESIS_SYSTEM
-            user = synthesis_user_prompt(self.target.base_url, transcript, observed_block)
+            user = synthesis_user_prompt(self.target.base_url, transcript,
+                                         observed_block, credentials=creds)
         messages: list[Message] = [
             {"role": "system", "content": system},
             {"role": "user", "content": user},

@@ -69,8 +69,9 @@ Hard requirements:
   NOT `.to_be_visible()` (the body can read as hidden behind overlays).
 - A locator may match MULTIPLE elements (product cards etc.). Never click or
   `expect(...).to_be_visible()` a multi-match locator (strict-mode error) — use
-  `.first` or assert the count. For "at least one", use `assert loc.count() > 0`
-  — do NOT invent Playwright methods. ONLY these expect assertions exist:
+  `.first`. For "at least one", use `expect(loc.first).to_be_visible()` — NEVER a
+  bare `loc.count()` (it does not wait and reads 0 before async content renders).
+  Do NOT invent Playwright methods. ONLY these expect assertions exist:
   `to_be_visible`, `to_be_attached`, `to_have_count(n)`, `to_have_text(...)`,
   `to_contain_text(...)`, `to_have_url(...)`. There is NO `to_have_count_greater_than`.
 - A shared test harness already runs automatically: it bounds action timeouts
@@ -105,6 +106,22 @@ Fix them and return the complete corrected module:
 """
 
 
+def _credentials_section(credentials: tuple[str, str] | None) -> str:
+    """A real, pre-registered test account so login flows use WORKING credentials.
+
+    Without this the model invents an email/password (e.g. test@test.com), the
+    login genuinely fails ('Invalid email or password'), and every downstream
+    logged-in story (basket, checkout) fails with it — not a model defect but a
+    missing test fixture. Injected identically wherever a suite may log in."""
+    if not credentials or not (credentials[0] and credentials[1]):
+        return ""
+    user, pw = credentials
+    return (f"\nTEST ACCOUNT — a real, pre-registered account. Use these EXACT "
+            f"credentials for any login; do NOT invent an email/password, and do "
+            f"NOT assert an exact post-login URL (use a substring/regex if at all):\n"
+            f"  email: {user}\n  password: {pw}\n")
+
+
 def _observed_section(observed_block: str) -> str:
     if not observed_block:
         return ""
@@ -123,13 +140,14 @@ def _observed_section(observed_block: str) -> str:
     )
 
 
-def synthesis_user_prompt(base_url: str, transcript: str, observed_block: str = "") -> str:
+def synthesis_user_prompt(base_url: str, transcript: str, observed_block: str = "",
+                          credentials: tuple[str, str] | None = None) -> str:
     return f"""\
 BASE URL: {base_url}
 
 WHAT YOU OBSERVED WHILE EXPLORING (urls, elements, page text):
 {transcript}
-{_observed_section(observed_block)}
+{_observed_section(observed_block)}{_credentials_section(credentials)}
 Now write the complete pytest-playwright end-to-end test suite for this
 application. Use descriptive test names.
 """
@@ -163,8 +181,9 @@ Hard requirements:
   regex if you check the URL at all. Avoid `body.to_be_visible()`.
 - A locator may match MULTIPLE elements (product cards etc.). Never click or
   `expect(...).to_be_visible()` a multi-match locator (strict-mode error) — use
-  `.first` or assert the count. For "at least one", use `assert loc.count() > 0`
-  — do NOT invent Playwright methods. ONLY these expect assertions exist:
+  `.first`. For "at least one", use `expect(loc.first).to_be_visible()` — NEVER a
+  bare `loc.count()` (it does not wait and reads 0 before async content renders).
+  Do NOT invent Playwright methods. ONLY these expect assertions exist:
   `to_be_visible`, `to_be_attached`, `to_have_count(n)`, `to_have_text(...)`,
   `to_contain_text(...)`, `to_have_url(...)`. There is NO `to_have_count_greater_than`.
 - A shared harness already dismisses welcome/cookie overlays and bounds timeouts.
@@ -183,7 +202,8 @@ def explore_goal(story_block: str | None, base_url: str = "") -> str:
 
 
 def synthesis_user_prompt_story(base_url: str, story_block: str, transcript: str,
-                                observed_block: str = "") -> str:
+                                observed_block: str = "",
+                                credentials: tuple[str, str] | None = None) -> str:
     return f"""\
 BASE URL: {base_url}
 
@@ -192,7 +212,7 @@ USER STORIES TO VERIFY:
 
 WHAT YOU OBSERVED WHILE EXPLORING (urls, elements, page text):
 {transcript}
-{_observed_section(observed_block)}
+{_observed_section(observed_block)}{_credentials_section(credentials)}
 Now write the complete pytest-playwright test suite that verifies these user
 stories (plus other important flows). Use descriptive test names.
 Map each story to the OBSERVED ELEMENTS above (e.g. the search toggle is the
