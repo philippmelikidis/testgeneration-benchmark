@@ -23,6 +23,7 @@ from tcgen.orchestration.aggregate import (
     aggregate_stats,
     flatten_result,
     mean_execution,
+    mean_iso,
     mean_judge,
 )
 from tcgen.orchestration.models import (
@@ -110,6 +111,7 @@ class ExperimentRunner:
             app_name=target.name,
             provider=self.settings.llm_provider,
             model=self.settings.generation_model,
+            evaluated=self.evaluate,
         )
 
         progress = Progress(self._total_units(pipelines, reps), sink)
@@ -145,40 +147,58 @@ class ExperimentRunner:
         # Ground the judge's plausibility check in the app's REAL surface.
         self._app_context = self._build_app_context(crawler_script)
 
-        # Collect samples: pipeline -> list of (script, execution, judge)
-        collected: dict[Pipeline, list[tuple]] = {}
+        # Collect samples: pipeline -> list of (script, execution, judge).
+        # Each (pipeline, repetition) is an INDEPENDENT unit of work whose cost is
+        # almost entirely waiting on the cloud LLM (generation) and the judge, so
+        # we run several concurrently (``eval_workers``) instead of strictly
+        # sequentially — this cuts wall-clock roughly linearly WITHOUT dropping any
+        # repetition or detail. The crawler is deterministic (1 rep, reused).
+        collected: dict[Pipeline, list[tuple]] = {p: [] for p in pipelines}
         gen_errors: dict[Pipeline, str] = {}
+
+        tasks: list[tuple[Pipeline, int, int]] = []
         for pipeline in pipelines:
-            label = pipeline.script_label
-            samples: list[tuple] = []
-            # The crawler is deterministic and generated once -> executing/judging
-            # it once is sufficient (repeating it N× only burns time on identical
-            # results). Repetitions matter only for the non-deterministic LLM
-            # pipelines, which regenerate each run.
             pipe_reps = 1 if pipeline is Pipeline.CRAWLER else reps
             for i in range(pipe_reps):
-                tag = f"(Lauf {i + 1}/{pipe_reps})"
-                try:
-                    script = self._generate(pipeline, target, crawler_script,
-                                            domain_context, progress, tag, reps_done=i)
-                except Exception as exc:  # noqa: BLE001
-                    gen_errors[pipeline] = f"generation failed: {exc}"
-                    log.exception("Generation failed for %s", pipeline)
-                    continue
-                ex = jd = None
-                if self.evaluate:
-                    ex = self._execute(script, pipeline, target, progress, label, tag)
-                    jd = self._judge(script, pipeline, target, progress, label, tag)
-                samples.append((script, ex, jd))
-            collected[pipeline] = samples
+                tasks.append((pipeline, i, pipe_reps))
 
-        denom = self._coverage_denominator(crawler_script, crawler_in, collected)
+        workers = max(1, min(int(getattr(self.settings, "eval_workers", 1)), len(tasks)))
+        if workers == 1:
+            for pl, i, pr in tasks:
+                pl_, sample, err = self._run_rep(pl, i, pr, target, crawler_script,
+                                                 domain_context, progress)
+                if err:
+                    gen_errors[pl_] = err
+                if sample is not None:
+                    collected[pl_].append(sample)
+        else:
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            sink(None, f"Parallele Auswertung: {workers} gleichzeitige Läufe "
+                       f"({len(tasks)} Einheiten)")
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                futs = [pool.submit(self._run_rep, pl, i, pr, target, crawler_script,
+                                    domain_context, progress)
+                        for pl, i, pr in tasks]
+                for fut in as_completed(futs):
+                    pl_, sample, err = fut.result()
+                    if err:
+                        gen_errors[pl_] = err
+                    if sample is not None:
+                        collected[pl_].append(sample)
+
+        denom, denom_source = self._coverage_denominator(crawler_script, crawler_in,
+                                                         collected)
         for pipeline in pipelines:
             result = self._aggregate(collected[pipeline], denom, gen_errors.get(pipeline),
                                      pipeline, app_key)
             record.pipelines.append(result)
 
-        record.notes = (f"coverage_denominator={denom} repetitions={reps} "
+        from tcgen.util import same_model_family
+        record.notes = (f"coverage_denominator={denom} ({denom_source}) "
+                        f"repetitions={reps} "
+                        f"judge_model={self.settings.judge_model} "
+                        f"judge_in_family="
+                        f"{same_model_family(self.settings.generation_model, self.settings.judge_model)} "
                         f"stories={[s.id for s in target.user_stories]}")
         path = self.store.save(record)
         progress.finish(f"gespeichert: {path.name}")
@@ -265,13 +285,34 @@ class ExperimentRunner:
                                    domain_context=domain_context, phase=ph)
         raise ValueError(f"Unknown pipeline {pipeline!r}")
 
-    def _execute(self, script, pipeline, target, progress, label, tag):
+    def _run_rep(self, pipeline, i, pipe_reps, target, crawler_script,
+                 domain_context, progress):
+        """One independent (pipeline, repetition) unit: generate -> execute ->
+        judge. Returns ``(pipeline, sample_or_None, error_or_None)``. Safe to run
+        concurrently: each rep gets its own provider (thread-safe) and an isolated
+        execution work dir (``work_tag``), so nothing is shared/overwritten."""
+        label = pipeline.script_label
+        tag = f"(Lauf {i + 1}/{pipe_reps})"
+        try:
+            script = self._generate(pipeline, target, crawler_script,
+                                    domain_context, progress, tag, reps_done=i)
+        except Exception as exc:  # noqa: BLE001
+            log.exception("Generation failed for %s", pipeline)
+            return pipeline, None, f"generation failed: {exc}"
+        ex = jd = None
+        if self.evaluate:
+            work_tag = f"{pipeline.value}_r{i}"
+            ex = self._execute(script, pipeline, target, progress, label, tag, work_tag)
+            jd = self._judge(script, pipeline, target, progress, label, tag)
+        return pipeline, (script, ex, jd), None
+
+    def _execute(self, script, pipeline, target, progress, label, tag, work_tag=""):
         ph = progress.phase(1, f"{label}: Ausführung {tag}")
         if not script.code.strip():
             ph.log("leeres Skript — Ausführung übersprungen")
             return ExecutionResult(first_error="leeres Skript (LLM lieferte keinen Code)")
         try:
-            ex = self.runner.run(script, phase=ph)
+            ex = self.runner.run(script, phase=ph, work_tag=work_tag)
         except Exception as exc:  # noqa: BLE001
             ph.log(f"FEHLER Ausführung {label}: {exc}")
             log.exception("Execution failed for %s", label)
@@ -288,7 +329,7 @@ class ExperimentRunner:
                 script, ex = runtime_repair(
                     script, target, self.runner, self._get_provider(), self.settings,
                     initial_exec=ex, app_surface=getattr(self, "_app_context", ""),
-                    max_rounds=rounds, phase=ph)
+                    max_rounds=rounds, work_tag=work_tag, phase=ph)
             except Exception as exc:  # noqa: BLE001
                 ph.log(f"Laufzeit-Repair übersprungen ({exc})")
                 log.exception("Runtime repair failed for %s", label)
@@ -332,17 +373,18 @@ class ExperimentRunner:
             log.exception("Judge failed for %s", label)
             return JudgeScores()
 
-    def _coverage_denominator(self, crawler_script, crawler_in, collected) -> int | None:
-        """Pipeline-neutral completeness denominator.
+    def _coverage_denominator(self, crawler_script, crawler_in,
+                              collected) -> tuple[int | None, str]:
+        """Completeness denominator; returns ``(value, source)``.
 
-        The denominator is the size of the UNION of distinct locator expressions
-        that *any* pipeline genuinely exercised (locators in passing tests),
-        across all pipelines and repetitions. This decouples completeness from
-        the crawler's discovered surface: an element an LLM pipeline reached but
-        the crawler missed now counts toward the shared reachable-and-verified
-        surface, removing the crawler-as-sole-authority bias. The crawler's
-        discovered-element count is only a last-resort fallback (nothing
-        exercised anywhere)."""
+        PRIMARY: distinct user-facing affordances (role, label) from the
+        crawler's catalog — rep-independent and robust against nth-of-type
+        DOM-node noise (see inline note). Secondary: the crawler's
+        ``discovered_elements`` count. FALLBACK (no crawler in the run): the
+        union of locators any pipeline exercised across all reps — that union
+        grows with the repetition count, so union-denominator runs are not
+        comparable to crawler-denominator runs; the source string is recorded
+        in the experiment notes to keep that visible."""
         # Stable, FAIR denominator: the number of DISTINCT user-facing UI
         # affordances the crawler catalogued — i.e. distinct (role, label) pairs,
         # not raw DOM-node signatures. `discovered_elements` counted every distinct
@@ -361,16 +403,16 @@ class ExperimentRunner:
                 for c in catalog if (c.get("label") or "").strip()
             }
             if affordances:
-                return len(affordances)
+                return len(affordances), "crawler_affordances"
             d = crawler_script.meta.get("discovered_elements")
             if d:
-                return d
+                return d, "crawler_discovered"
         union: set[str] = set()
         for samples in collected.values():
             for (_s, ex, _j) in samples:
                 if ex is not None:
                     union |= set(ex.exercised_locators)
-        return len(union) or None
+        return (len(union) or None), "union_fallback(rep-abhängig)"
 
     def _aggregate(self, samples, denom, gen_error, pipeline, app_key) -> PipelineResult:
         if not samples:
@@ -392,11 +434,19 @@ class ExperimentRunner:
         std, anomalies = aggregate_stats(reps_flat)
         mexec = mean_execution([ex for _s, ex, _j in samples])
         mjudge = mean_judge([jd for _s, _e, jd in samples])
+        # ISO-Correctness silently degrades to SSR-only when the judge yields no
+        # score — flag it so the changed metric composition is visible.
+        if mjudge.correctness is None:
+            anomalies.append("Judge lieferte keinen Correctness-Score — "
+                             "ISO-Correctness basiert nur auf der SSR")
         return PipelineResult(
             script=samples[0][0],
             execution=mexec,
             judge=mjudge,
-            iso=map_to_iso(mexec, mjudge, denom),
+            # Headline ISO = mean of the per-rep ISO values (consistent with the
+            # reported per-metric std; map_to_iso over MEAN inputs diverges via
+            # the rounding of exercised_coverage and the min-cap nonlinearity).
+            iso=mean_iso(reps_flat),
             error=gen_error,
             n_runs=len(samples),
             metric_std=std,

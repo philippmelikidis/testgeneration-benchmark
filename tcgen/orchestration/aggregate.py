@@ -11,6 +11,7 @@ import statistics
 from tcgen.orchestration.models import (
     ExecutionResult,
     ExperimentRecord,
+    Iso25010,
     JudgeScores,
     PipelineResult,
 )
@@ -108,7 +109,9 @@ def mean_execution(execs: list[ExecutionResult]) -> ExecutionResult:
     story_covered = round(_avg(covered_vals), 4) if covered_vals else None
     return ExecutionResult(
         executed=any(e.executed for e in execs),
-        passed=sum(1 for e in execs if e.passed) * 2 >= len(execs),  # majority green
+        # STRICT majority green: a tie (e.g. 1 of 2 reps) is not "passed" —
+        # `>=` counted exactly-half as green, an optimistic bias.
+        passed=sum(1 for e in execs if e.passed) * 2 > len(execs),
         n_tests=round(avg("n_tests")),
         n_passed=round(avg("n_passed")),
         n_failed=round(avg("n_failed")),
@@ -134,12 +137,38 @@ def mean_judge(judges: list[JudgeScores]) -> JudgeScores:
         return round(_avg(vals), 4) if vals else None
 
     reasons = next((j.reasons for j in judges if j.reasons), {})
+    if reasons and len(judges) > 1:
+        # The scores are means, but the reasons come from a single run — say so,
+        # otherwise a single justification reads like the rationale of the mean.
+        reasons = {**reasons,
+                   "_hinweis": f"Begründungen stammen aus einem von {len(judges)} "
+                               f"Läufen; die Scores sind Mittelwerte."}
     return JudgeScores(
         correctness=avg("correctness"),
         appropriateness=avg("appropriateness"),
         hallucination=avg("hallucination"),
         readability=avg("readability"),
         reasons=reasons,
+    )
+
+
+def mean_iso(reps_flat: list[dict]) -> Iso25010:
+    """Headline ISO = mean of the per-rep ISO values.
+
+    Consistent with the per-metric std (both computed over the same per-rep
+    series). Recomputing ``map_to_iso`` from mean inputs instead diverges via
+    the integer rounding of ``exercised_coverage`` and the ``min(…, 1.0)`` cap.
+    """
+    def avg(key: str) -> float | None:
+        vals = [r[key] for r in reps_flat
+                if isinstance(r.get(key), (int, float))
+                and not isinstance(r.get(key), bool)]
+        return round(_avg(vals), 4) if vals else None
+
+    return Iso25010(
+        functional_correctness=avg("iso_correctness"),
+        functional_completeness=avg("iso_completeness"),
+        functional_appropriateness=avg("iso_appropriateness"),
     )
 
 
@@ -152,7 +181,9 @@ def aggregate_stats(reps: list[dict]) -> tuple[dict, list[str]]:
             if isinstance(r.get(key), (int, float)) and not isinstance(r.get(key), bool)
         ]
         if len(vals) > 1:
-            std[key] = round(statistics.pstdev(vals), 4)
+            # Sample std (n-1): the reps are a sample of the model's output
+            # distribution; pstdev systematically underestimates at small n.
+            std[key] = round(statistics.stdev(vals), 4)
 
     anomalies: list[str] = []
     n = len(reps)

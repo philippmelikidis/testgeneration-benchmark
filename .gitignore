@@ -22,3 +22,6 @@ results/jobs/
 !generated/.gitkeep
 !results/.gitkeep
 test-results/
+
+# Crawlee runtime scratch (request queues, key-value stores)
+storage/

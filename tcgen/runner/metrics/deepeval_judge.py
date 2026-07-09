@@ -9,6 +9,7 @@ experiment.
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from config.settings import Settings, get_settings
 from tcgen.llm import LLMProvider, get_judge_provider
@@ -171,9 +172,8 @@ class DeepEvalJudge:
             if metrics is not None and k not in metrics:
                 scores[k] = None
                 reasons[k] = "n/a (für diese Pipeline nicht anwendbar)"
-        n = max(len(items), 1)
-        for i, (key, criteria) in enumerate(items):
-            phase.update(i / n, f"Judge: {key}")
+
+        def _measure_one(key: str, criteria: str) -> tuple[str, float | None, str]:
             # G-Eval asks the judge model to emit JSON; thinking models (glm) now
             # and then return malformed JSON ("Evaluation LLM outputted an invalid
             # JSON"). That is a transient sampling failure, so retry once before
@@ -191,21 +191,28 @@ class DeepEvalJudge:
                     # hallucination score: higher = MORE invented references = worse.
                     if key == "hallucination":
                         score = 1.0 - score
-                    scores[key] = round(score, 4)
-                    reasons[key] = (metric.reason or "")[:500]
-                    last_exc = None
-                    break
+                    return key, round(score, 4), (metric.reason or "")[:500]
                 except Exception as exc:  # noqa: BLE001
                     last_exc = exc
                     if attempt == 0:
                         log.info("Judge metric %r attempt 1 failed (%s) — retrying",
                                  key, exc)
-            if last_exc is not None:
-                log.warning("Judge metric %r failed after retry: %s", key, last_exc)
-                scores[key] = None
-                reasons[key] = f"error: {last_exc}"
+            log.warning("Judge metric %r failed after retry: %s", key, last_exc)
+            return key, None, f"error: {last_exc}"
 
-        phase.update(1.0, "Judge fertig")
+        # The 4 metrics are independent cloud calls (~60 s each on glm-5.2:cloud).
+        # Run them concurrently instead of serially: ~4 min -> ~1 min per judge,
+        # with NO change to any score (each GEval is measured exactly as before).
+        n = max(len(items), 1)
+        done = 0
+        with ThreadPoolExecutor(max_workers=n) as pool:
+            futures = [pool.submit(_measure_one, key, crit) for key, crit in items]
+            for fut in as_completed(futures):
+                key, score, reason = fut.result()
+                scores[key] = score
+                reasons[key] = reason
+                done += 1
+                phase.update(done / n, f"Judge: {key} fertig ({done}/{n})")
         return JudgeScores(
             correctness=scores.get("correctness"),
             appropriateness=scores.get("appropriateness"),

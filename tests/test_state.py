@@ -46,10 +46,14 @@ def test_goto_action_code_lines():
 
 
 def test_click_action_code_lines():
+    # Clicks render with a short-timeout normal click plus a synthetic-click
+    # fallback for elements Playwright reports as outside the viewport.
     el = ElementDescriptor(tag="a", text="Cart", href="/cart")
     act = Action(kind="click", element=el)
     lines = act.code_lines()
-    assert any(".click()" in ln for ln in lines)
+    assert any(".click(timeout=" in ln for ln in lines)
+    assert any('.dispatch_event("click")' in ln for ln in lines)
+    assert lines[0] == "try:"
     assert "page.wait_for_load_state()" in lines
 
 

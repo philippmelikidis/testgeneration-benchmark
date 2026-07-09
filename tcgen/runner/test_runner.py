@@ -134,19 +134,14 @@ _NO_ANIM_JS = """
 """
 
 
-# Pre-seed the "already dismissed" state so the welcome dialog and cookie banner
-# never appear. This is the reliable fix for the recurring failure where the
-# welcome MODAL marks the rest of the app aria-hidden, so role-based locators
-# (e.g. get_by_role("button", name="Open Sidenav")) can't find anything and time
-# out. Reactive overlay handlers fire too late for this. Part of the shared
-# harness -> applied identically to every pipeline (not result tuning).
-_PREDISMISS_JS = """
-(() => {{
-  try {{ localStorage.setItem('welcomebanner_status','dismiss'); }} catch(e) {{}}
-  try {{ localStorage.setItem('cookieconsent_status','dismiss'); }} catch(e) {{}}
-  try {{ document.cookie = 'cookieconsent_status=dismiss; path=/'; }} catch(e) {{}}
-}})();
-"""
+# Pre-seed the "already dismissed" state so first-visit overlays (welcome
+# dialog, cookie banner) never appear. This is the reliable fix for the failure
+# where a welcome MODAL marks the rest of the app aria-hidden, so role-based
+# locators can't find anything and time out — reactive overlay handlers fire
+# too late for that. The keys come from the target config
+# (``predismiss_storage``), NOT from app-specific hard-coding in this shared
+# harness; applied identically to every pipeline (not result tuning).
+_PREDISMISS_JS = {predismiss_js}
 
 
 # Juice Shop leaves the DISMISSED cookie-consent banner in the DOM as a hidden
@@ -178,6 +173,8 @@ _KILL_COOKIECONSENT_JS = """
 def _harness(page):
     page.set_default_timeout({timeout})
     for _script in (_PREDISMISS_JS, _KILL_COOKIECONSENT_JS, _NO_ANIM_JS):
+        if not _script:
+            continue
         try:
             page.add_init_script(_script)
         except Exception:
@@ -187,21 +184,40 @@ def _harness(page):
 '''
 
 
+def _predismiss_js(storage: dict[str, str]) -> str:
+    """Build the pre-seed init script from the target's predismiss config."""
+    if not storage:
+        return ""
+    stmts = []
+    for key, value in storage.items():
+        stmts.append(f"try {{ localStorage.setItem({json.dumps(key)},"
+                     f"{json.dumps(value)}); }} catch(e) {{}}")
+        stmts.append(f"try {{ document.cookie = {json.dumps(f'{key}={value}; path=/')}; }}"
+                     f" catch(e) {{}}")
+    return "(() => { " + " ".join(stmts) + " })();"
+
+
 class TestRunner:
     def __init__(self, settings: Settings | None = None, *, run_timeout_s: int = 300):
         self.settings = settings or get_settings()
         self.run_timeout_s = run_timeout_s
 
-    def run(self, script: GeneratedScript, phase=None) -> ExecutionResult:
+    def run(self, script: GeneratedScript, phase=None,
+            work_tag: str = "") -> ExecutionResult:
         from tcgen.progress import NullPhase
 
         phase = phase or NullPhase()
-        path = self._materialise(script)
+        # ``work_tag`` isolates a run's scratch files (test module + conftest +
+        # json report) into their own directory, so several repetitions of the
+        # SAME pipeline can execute CONCURRENTLY without overwriting each other's
+        # ``test_<pipeline>.py``. Empty -> the shared canonical path (sequential).
+        path = self._materialise(script, work_tag)
         runs: list[dict] = []
         n = max(1, self.settings.flakiness_runs)
+        label_base = f"{work_tag}_{script.pipeline.value}" if work_tag else script.pipeline.value
         for i in range(n):
             phase.update(i / n, f"pytest-Lauf {i + 1}/{n} ({script.pipeline.script_label})")
-            runs.append(self._run_once(path, label=f"{script.pipeline.value}_{i}"))
+            runs.append(self._run_once(path, label=f"{label_base}_{i}"))
         phase.update(1.0, f"Ausführung fertig: {runs[0]['n_passed']}/{runs[0]['n_tests']} grün")
 
         first = runs[0]
@@ -240,8 +256,17 @@ class TestRunner:
         )
 
     # ------------------------------------------------------------------ #
-    def _materialise(self, script: GeneratedScript) -> Path:
-        out_dir = GENERATED_DIR / script.app_key
+    def _materialise(self, script: GeneratedScript, work_tag: str = "") -> Path:
+        # Concurrent reps get an isolated scratch dir; the canonical (unsuffixed)
+        # location is kept for sequential runs so the on-disk artefact stays where
+        # tooling expects it. The UI reads code from the record, not these files.
+        # Isolated dirs are SIBLINGS of the app dir (generated/.work/<app>_<tag>),
+        # NOT children of generated/<app>/ — otherwise pytest would also load that
+        # dir's leftover conftest.py and double-apply the autouse harness fixture.
+        if work_tag:
+            out_dir = GENERATED_DIR / ".work" / f"{script.app_key}_{work_tag}"
+        else:
+            out_dir = GENERATED_DIR / script.app_key
         out_dir.mkdir(parents=True, exist_ok=True)
         self._write_conftest(out_dir, script.app_key)
         path = out_dir / f"test_{script.pipeline.value}.py"
@@ -252,12 +277,15 @@ class TestRunner:
 
     def _write_conftest(self, out_dir: Path, app_key: str) -> None:
         try:
-            selectors = load_target(app_key).dismiss_selectors
+            target = load_target(app_key)
+            selectors = target.dismiss_selectors
+            predismiss = getattr(target, "predismiss_storage", {}) or {}
         except Exception:  # noqa: BLE001
-            selectors = []
+            selectors, predismiss = [], {}
         conftest = _CONFTEST_TEMPLATE.format(
             timeout=self.settings.test_action_timeout_ms,
             selectors=repr(list(selectors)),
+            predismiss_js=repr(_predismiss_js(predismiss)),
         )
         (out_dir / "conftest.py").write_text(conftest, encoding="utf-8")
 

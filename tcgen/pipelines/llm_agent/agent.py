@@ -75,19 +75,30 @@ def _story_block(stories: list[UserStory]) -> str:
 
 class LLMAgent:
     def __init__(self, target: TargetApp, settings: Settings | None = None,
-                 provider: LLMProvider | None = None):
+                 provider: LLMProvider | None = None, grounding: dict | None = None):
         self.target = target
         self.settings = settings or get_settings()
         self.provider = provider or get_provider(self.settings)
+        # Optional crawler map for the GROUNDED-agent mode (Skript_H): a dict with
+        # ``routes`` (list[str]) and ``catalog`` (list[{label, role, locator, url}]).
+        # When present, the agent still explores LIVE (it clicks through and
+        # verifies elements itself), but it is seeded with the crawler's known
+        # routes + verified selectors so it navigates efficiently (e.g. straight to
+        # /#/login) and grounds its synthesised suite in real, catalogued locators.
+        self.grounding = grounding or None
 
     # ------------------------------------------------------------------ #
-    def generate(self, phase: Phase | None = None, *, with_stories: bool = False) -> GeneratedScript:
+    def generate(self, phase: Phase | None = None, *, with_stories: bool = False,
+                 pipeline_override: Pipeline | None = None) -> GeneratedScript:
         phase = phase or NullPhase()
         t0 = time.time()
-        pipeline = Pipeline.LLM_AGENT_STORY if with_stories else Pipeline.LLM_AGENT
+        pipeline = pipeline_override or (
+            Pipeline.LLM_AGENT_STORY if with_stories else Pipeline.LLM_AGENT)
         story_block = _story_block(self.target.user_stories) if with_stories else None
-        mode = "mit User-Story" if with_stories else "ohne User-Story"
-        phase.update(0.02, f"Agent startet Exploration (Crawler-Aufgabe, {mode})")
+        grounded = self.grounding is not None
+        mode = ("grounded (Crawler-Map + Story)" if grounded
+                else "mit User-Story" if with_stories else "ohne User-Story")
+        phase.update(0.02, f"Agent startet Exploration ({mode})")
         session, backend = self._open_session(phase)
         try:
             observation = session.navigate(self.target.entry_paths[0])
@@ -96,11 +107,31 @@ class LLMAgent:
             session.__exit__(None, None, None)
         phase.update(0.9, "Synthese der Testsuite aus Beobachtungen")
         transcript = self._build_transcript(action_log, pages)
+        # In grounded mode, fold the crawler's verified catalog labels into the
+        # observed set so synthesis treats them as real, seen elements too.
+        if grounded:
+            for c in (self.grounding.get("catalog") or []):
+                label, role = (c.get("label") or "").strip(), c.get("role") or ""
+                if label:
+                    observed.append(f'{role} "{label}"' if role else f'text "{label}"')
+            observed = list(dict.fromkeys(observed))  # dedup, keep order
         code = self._synthesize(transcript, story_block, observed)
         code = self._maybe_repair(code, phase)
         code = self._absolutise_gotos(code)
-        code = postprocess_playwright_code(code)
+        code, postprocess_fixes = postprocess_playwright_code(code)
         phase.update(1.0, f"{pipeline.script_label} erzeugt ({len(code.splitlines())} Zeilen)")
+        meta = {
+            "agent_steps": len(action_log),
+            "pages_observed": len(pages),
+            "user_story_used": with_stories,
+            "browser_backend": backend,
+            "grounded_agent": grounded,
+            # Transparency: which deterministic rewrites touched the code.
+            "postprocess_fixes": postprocess_fixes,
+        }
+        if grounded:
+            meta["grounded_routes"] = len(self.grounding.get("routes") or [])
+            meta["grounded_locators"] = len(self.grounding.get("catalog") or [])
         return GeneratedScript(
             pipeline=pipeline,
             app_key=self.target.key,
@@ -109,12 +140,7 @@ class LLMAgent:
             generation_time_s=round(time.time() - t0, 2),
             model=self.provider.model,
             provider=self.provider.name,
-            meta={
-                "agent_steps": len(action_log),
-                "pages_observed": len(pages),
-                "user_story_used": with_stories,
-                "browser_backend": backend,
-            },
+            meta=meta,
         )
 
     # ------------------------------------------------------------------ #
@@ -163,6 +189,18 @@ class LLMAgent:
         observed: dict[str, None] = {}  # distinct 'role "name"' seen (ordered set)
         max_steps = self.settings.agent_max_steps
         goal = explore_goal(story_block, self.target.base_url)
+        if self.grounding is not None:
+            routes = self.grounding.get("routes") or []
+            cat = self.grounding.get("catalog") or []
+            labels = [c.get("label") for c in cat if c.get("label")]
+            goal += (
+                "\n\nCRAWLER MAP (a traditional crawler already explored this app — "
+                "use it to navigate efficiently and target REAL elements):\n"
+                "- Known routes (navigate straight to the relevant one, e.g. login/"
+                f"register): {', '.join(routes[:40]) or '(none)'}\n"
+                f"- Known element labels (verified to exist): {', '.join(labels[:60]) or '(none)'}\n"
+                "Reach the story-relevant flows (login, registration, basket) by "
+                "navigating to their routes and clicking these known elements.")
         last_sig = ""
         repeats = 0
 

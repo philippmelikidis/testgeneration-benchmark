@@ -85,6 +85,12 @@ class Settings(BaseSettings):
     playwright_mcp_command: str = "npx"
     playwright_mcp_args: str = "@playwright/mcp@latest --headless --isolated --browser chromium"
     playwright_mcp_start_timeout_s: float = 90.0
+    # Crawler backend: "bfs" = the built-in stateful click-based explorer (records
+    # replayable click-path scenarios); "crawlee" = the crawlee[playwright] route-
+    # discovery backend (fast parallel route/element harvest incl. login/register;
+    # Skript_C becomes route-smoke tests). "crawlee" needs `pip install
+    # "crawlee[playwright]"`; it falls back to nothing, so keep "bfs" as default.
+    crawler_backend: Literal["bfs", "crawlee"] = "bfs"
     crawler_max_states: int = 40
     crawler_max_depth: int = 4
     # Generous per-state interaction budget: the crawler is the COMPLETENESS
@@ -109,6 +115,15 @@ class Settings(BaseSettings):
     # How many times the non-deterministic LLM stages (Skript_L/H) and the judge
     # are repeated; results are aggregated to a mean with std + anomalies.
     repetitions: int = 1
+    # How many repetitions (and pipelines) are evaluated CONCURRENTLY. The work
+    # per rep is almost entirely I/O-bound waiting on the cloud LLM (generation)
+    # and the judge, so running several at once cuts wall-clock roughly linearly
+    # WITHOUT dropping any repetition or detail. Each rep gets its own provider
+    # (thread-safe httpx client) and its own browser session. Raise for more
+    # speed; lower to 1 if concurrent in-process browsers strain the machine or
+    # you hit cloud rate limits. Judge metrics ALWAYS run in parallel (4 -> ~1),
+    # independent of this knob.
+    eval_workers: int = 3
     # SPA settle: cap for the networkidle wait (Juice Shop polls in the
     # background and never truly idles, so keep this small) + a short paint pause.
     settle_timeout_ms: int = 1500
@@ -177,6 +192,13 @@ class TargetApp(BaseModel):
     # test harness auto-dismisses these so they don't intercept actions. This is
     # environment setup applied identically to every pipeline, not result tuning.
     dismiss_selectors: list[str] = Field(default_factory=list)
+    # localStorage keys/values (mirrored into a same-named cookie) that the
+    # harness pre-seeds before page load so first-visit overlays never appear
+    # (a welcome MODAL otherwise marks the app aria-hidden and blocks role-based
+    # locators; reactive dismissal fires too late). App-specific environment
+    # setup that used to be hard-coded in the "generic" harness — it belongs
+    # here, applied identically to every pipeline.
+    predismiss_storage: dict[str, str] = Field(default_factory=dict)
     user_stories: list[UserStory] = Field(default_factory=list)
 
 
