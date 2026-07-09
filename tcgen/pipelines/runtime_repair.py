@@ -99,6 +99,7 @@ def runtime_repair(
     initial_exec: ExecutionResult | None = None,
     app_surface: str = "",
     max_rounds: int = 2,
+    work_tag: str = "",
     phase=None,
 ) -> tuple[GeneratedScript, ExecutionResult]:
     """Run -> fix-failing-tests -> re-run, keeping the best-SSR version.
@@ -114,7 +115,8 @@ def runtime_repair(
         return script, (initial_exec or ExecutionResult(
             first_error="leeres Skript (LLM lieferte keinen Code)"))
 
-    best_exec = initial_exec if initial_exec is not None else runner.run(script, phase=phase)
+    best_exec = (initial_exec if initial_exec is not None
+                 else runner.run(script, phase=phase, work_tag=work_tag))
     best_code = script.code
     ssr_before = round(best_exec.ssr, 4)
     rounds_used = 0
@@ -133,7 +135,8 @@ def runtime_repair(
                 best_code, failures, target.base_url, app_surface)},
         ]
         try:
-            new_code = postprocess_playwright_code(extract_code_block(provider.chat(messages)))
+            new_code, _fixes = postprocess_playwright_code(
+                extract_code_block(provider.chat(messages)))
         except Exception as exc:  # noqa: BLE001
             phase.log(f"Repair-Aufruf fehlgeschlagen ({exc}) — behalte beste Version")
             break
@@ -142,7 +145,7 @@ def runtime_repair(
             break
 
         candidate = script.model_copy(update={"code": new_code})
-        cand_exec = runner.run(candidate, phase=phase)
+        cand_exec = runner.run(candidate, phase=phase, work_tag=work_tag)
         rounds_used = r + 1
         if cand_exec.ssr > best_exec.ssr:
             phase.log(f"Repair verbesserte SSR {best_exec.ssr:.2f} → {cand_exec.ssr:.2f}")

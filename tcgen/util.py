@@ -104,23 +104,51 @@ _COUNT_MIN_RE = re.compile(
     r"""[^)]*minimum\s*=\s*True[^)]*\)""")
 
 
-def postprocess_playwright_code(code: str) -> str:
+def _count_gt_repl(m: re.Match) -> str:
+    # count > N  <=>  the element at 0-based index N exists. `nth(N)` +
+    # `to_be_attached()` is a WAITING assertion (handles async-rendered results)
+    # and preserves the written threshold instead of weakening it to "first
+    # element visible".
+    n = int(m.group("n"))
+    return f"expect(({m.group('loc')}).nth({n})).to_be_attached()"
+
+
+def _count_min_repl(m: re.Match) -> str:
+    # count >= N  <=>  the element at index N-1 exists (N >= 1; for the
+    # degenerate N=0 the check collapses to "at least one", which is stricter
+    # than the trivially-true original but keeps the assertion meaningful).
+    n = max(int(m.group("n")) - 1, 0)
+    return f"expect(({m.group('loc')}).nth({n})).to_be_attached()"
+
+
+def postprocess_playwright_code(code: str) -> tuple[str, list[str]]:
     """Deterministically fix common LLM API slips so the module runs.
 
-    LLMs frequently invent Playwright methods or forget imports; these are cheap,
-    safe rewrites that turn a guaranteed crash into a real assertion:
-    * ``expect(X).to_have_count_greater_than(N)`` -> ``assert (X).count() > N``
-      (no such Playwright assertion exists).
+    LLMs frequently invent Playwright methods or forget imports; these are
+    cheap rewrites that turn a guaranteed crash (or a non-waiting flaky check)
+    into a *semantically equivalent*, WAITING assertion:
+    * ``expect(X).to_have_count_greater_than(N)`` and the invented
+      ``to_have_count(N, minimum=True)`` -> ``expect((X).nth(...)).to_be_attached()``
+      with the SAME threshold (count > N <=> index N exists) — the rewrite must
+      not weaken what the model asserted.
+    * non-waiting ``assert X.count() > 0`` -> waiting first-match visibility.
     * add ``import re`` when ``re.`` is used but not imported.
+
+    Returns ``(code, fixes)`` where ``fixes`` describes every applied rewrite,
+    so pipelines can record in the script meta how often the deterministic
+    post-processor intervened (methodological transparency).
     """
-    # Invented "greater than" / "at least" count assertions -> a WAITING check.
-    # `expect(loc.first).to_be_visible()` auto-waits for the first match, so it
-    # handles async-rendered results (e.g. search hits); a bare `loc.count()` does
-    # NOT wait and returns 0 before the SPA renders.
-    code = _COUNT_GT_RE.sub(r"expect((\g<loc>).first).to_be_visible()", code)
-    code = _COUNT_MIN_RE.sub(r"expect((\g<loc>).first).to_be_visible()", code)
-    code = _ASSERT_COUNT_RE.sub(
+    fixes: list[str] = []
+    code, n = _COUNT_GT_RE.subn(_count_gt_repl, code)
+    if n:
+        fixes.append(f"to_have_count_greater_than -> nth(N).to_be_attached ({n}x)")
+    code, n = _COUNT_MIN_RE.subn(_count_min_repl, code)
+    if n:
+        fixes.append(f"to_have_count(minimum=True) -> nth(N-1).to_be_attached ({n}x)")
+    code, n = _ASSERT_COUNT_RE.subn(
         r"\g<indent>expect((\g<loc>).first).to_be_visible()", code)
+    if n:
+        fixes.append(f"assert count()>0 -> expect(first).to_be_visible ({n}x)")
     # Missing `import re` (models use re.compile for name=... regex locators).
     if re.search(r"\bre\.", code) and not re.search(r"^\s*import re\b", code, re.MULTILINE):
         lines = code.splitlines()
@@ -130,7 +158,8 @@ def postprocess_playwright_code(code: str) -> str:
                 insert_at = i + 1
         lines.insert(insert_at, "import re")
         code = "\n".join(lines)
-    return code
+        fixes.append("import re ergänzt")
+    return code, fixes
 
 
 def model_family(model: str) -> str:

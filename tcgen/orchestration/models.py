@@ -154,6 +154,10 @@ class ExperimentRecord(BaseModel):
     pipelines: list[PipelineResult] = Field(default_factory=list)
     created_at: str = Field(default_factory=_now)
     notes: str = ""
+    # False when the run was started generation-only (evaluate off): execution/
+    # judge/ISO fields then hold their DEFAULTS (executed=False, SSR 0.0, n/a),
+    # which must be rendered as "nicht bewertet", not as a failed run.
+    evaluated: bool = True
 
     def by_pipeline(self, pipeline: Pipeline) -> PipelineResult | None:
         for r in self.pipelines:

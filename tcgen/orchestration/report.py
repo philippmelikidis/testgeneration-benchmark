@@ -41,6 +41,10 @@ def record_to_markdown(record: ExperimentRecord, *, include_scripts: bool = True
     out.append(f"- Experiment: `{record.id}`")
     out.append(f"- Provider / Modell: `{record.provider}` / `{record.model}`")
     out.append(f"- Zeitpunkt: {record.created_at}")
+    # getattr: tolerate records/processes from before the `evaluated` field.
+    if not getattr(record, "evaluated", True):
+        out.append("- **Bewertung: deaktiviert** — Skripte wurden nur generiert, nie "
+                   "ausgeführt oder gejudged; Metriken sind daher leer (kein Fehlschlag).")
     if record.notes:
         out.append(f"- Notes: {record.notes.strip()}")
     out.append("")

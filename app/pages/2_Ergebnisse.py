@@ -41,6 +41,17 @@ st.markdown(
     f"{record.created_at}"
 )
 
+# getattr: tolerate a running server that still has the pre-`evaluated` model
+# cached (Streamlit re-runs pages, but keeps imported modules loaded).
+record_evaluated = getattr(record, "evaluated", True)
+if not record_evaluated:
+    st.warning(
+        "Dieser Lauf wurde **ohne Bewertung** gestartet (Checkbox „Bewerten (Runner + "
+        "DeepEval)“ war deaktiviert): Die Skripte wurden nur generiert, nie ausgeführt "
+        "oder gejudged. Ausführungs-/Judge-/ISO-Metriken sind daher leer — das ist kein "
+        "Fehlschlag der Pipelines. Für Metriken den Lauf mit aktivierter Bewertung "
+        "wiederholen.")
+
 # --- export (so the full result can be downloaded instead of copied) ------- #
 from tcgen.orchestration.report import record_to_markdown  # noqa: E402
 
@@ -71,16 +82,20 @@ cols = st.columns(max(len(rows), 1))
 for col, row, result in zip(cols, rows, results):
     with col:
         st.markdown(f"**{row['script']}**  \n`{row['pipeline']}` · {result.n_runs}×")
-        st.metric("ISO Functional Suitability", ui.fmt(row["iso_overall"]))
-        st.metric("Ausführbar / grün",
-                  f"{ui.fmt(row['executed'])} / {ui.fmt(row['passed'])}")
-        st.metric("SSR", ui.fmt(row["ssr"]))
-        # ISO sub-characteristics at a glance (Completeness etc.).
-        st.caption(
-            f"ISO Correctness: **{ui.fmt(row['iso_correctness'])}**  \n"
-            f"ISO Completeness: **{ui.fmt(row['iso_completeness'])}**  \n"
-            f"ISO Appropriateness: **{ui.fmt(row['iso_appropriateness'])}**"
-        )
+        if record_evaluated:
+            st.metric("ISO Functional Suitability", ui.fmt(row["iso_overall"]))
+            st.metric("Ausführbar / grün",
+                      f"{ui.fmt(row['executed'])} / {ui.fmt(row['passed'])}")
+            st.metric("SSR", ui.fmt(row["ssr"]))
+            # ISO sub-characteristics at a glance (Completeness etc.).
+            st.caption(
+                f"ISO Correctness: **{ui.fmt(row['iso_correctness'])}**  \n"
+                f"ISO Completeness: **{ui.fmt(row['iso_completeness'])}**  \n"
+                f"ISO Appropriateness: **{ui.fmt(row['iso_appropriateness'])}**"
+            )
+        else:
+            st.metric("Status", "nicht bewertet")
+            st.caption("Nur Generierung — keine Ausführungs-/Judge-Metriken.")
         if row["error"]:
             st.error(row["error"], icon=None)
 

@@ -1,9 +1,9 @@
-"""Hybrid refiner pipeline (Skript_H, Methode 2).
+"""Hybrid pipeline (Skript_H, Methode 2 — grounded agent).
 
-Takes the traditional crawler artefact (Skript_C) and asks an LLM to improve it
-along three explicit axes: robust locators, requirement-derived assertions, and
-readability/maintainability. Kept fully separate from Methode 1 so it can be
-switched on as the second increment without touching the baseline pipelines.
+Skript_H is a LIVE LLM agent seeded with the traditional crawler's state graph
+(routes + verified locator catalog): it explores the app itself but stays
+grounded in the crawler's real selectors. Kept separate from Methode 1 so the
+baseline pipelines are untouched.
 """
 
 from tcgen.pipelines.hybrid.refiner import HybridRefiner, generate

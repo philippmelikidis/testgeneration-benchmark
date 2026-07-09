@@ -74,7 +74,11 @@ def generate(target: TargetApp, settings: Settings | None = None,
     """Run the crawler and return the serialised ``Skript_C`` as a model."""
     settings = settings or get_settings()
     t0 = time.time()
-    crawl = Crawler(target, settings).crawl(phase=phase)
+    if getattr(settings, "crawler_backend", "bfs") == "crawlee":
+        from tcgen.pipelines.crawler.crawlee_crawler import CrawleeCrawler
+        crawl = CrawleeCrawler(target, settings).crawl(phase=phase)
+    else:
+        crawl = Crawler(target, settings).crawl(phase=phase)
     code = serialize(crawl, target)
     return GeneratedScript(
         pipeline=Pipeline.CRAWLER,

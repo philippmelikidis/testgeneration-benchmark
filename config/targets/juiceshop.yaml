@@ -33,6 +33,14 @@ dismiss_selectors:
   - "#dismissWelcomeButton"
   - "a.cc-dismiss"
 
+# First-visit overlays: pre-seed the dismissed state (localStorage + cookie)
+# before page load so the welcome modal / cookie banner never appear — the
+# modal otherwise marks the app aria-hidden and blocks role-based locators.
+# Environment setup, applied identically to every pipeline.
+predismiss_storage:
+  welcomebanner_status: "dismiss"
+  cookieconsent_status: "dismiss"
+
 user_stories:
   - id: "US-1"
     title: "Produktsuche"

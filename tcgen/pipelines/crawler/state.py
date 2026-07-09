@@ -113,6 +113,12 @@ class ElementDescriptor:
     testid: str = ""
     href: str = ""
     css: str = ""  # unique-ish CSS path (id or nth-of-type chain) computed in JS
+    # Set by the crawler when it VERIFIED live that the semantic (role/name)
+    # locator does not resolve for this element (a11y name differs from the
+    # harvested aria-label — e.g. Juice Shop's 'Open search' button) but the CSS
+    # path does. locator_code/live_locator then prefer CSS so the serialised
+    # replay uses the locator that actually worked.
+    prefer_css: bool = False
 
     # --- classification ---
     @property
@@ -177,6 +183,8 @@ class ElementDescriptor:
         """Return a robust Playwright-Python locator expression as source code."""
         if self.testid:
             return f'{page}.get_by_test_id({_q(self.testid)})'
+        if self.prefer_css and self.css:
+            return f'{page}.locator({_q(self.css)})'
         name = self.accessible_name
         if self.is_input:
             if self.placeholder:
@@ -346,6 +354,8 @@ def live_locator(page, el: "ElementDescriptor"):
     """
     if el.testid:
         return page.get_by_test_id(el.testid)
+    if el.prefer_css and el.css:
+        return page.locator(el.css)
     name = el.accessible_name
     if el.is_input:
         if el.placeholder:

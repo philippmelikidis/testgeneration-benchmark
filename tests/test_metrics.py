@@ -33,6 +33,47 @@ def test_exercised_coverage_only_counts_passing_tests():
     assert objective.exercised_locator_count(SAMPLE, set()) == 0  # nothing passed
 
 
+def test_exercised_coverage_handles_class_based_tests_and_nested_parens():
+    # Real LLM output patterns the old regex missed: test methods inside
+    # classes (regex only matched module-level `def test_`), locators with
+    # nested parentheses (re.compile in name=), and multi-line calls.
+    code = '''
+import re
+from playwright.sync_api import Page, expect
+
+class TestSuite:
+    def test_a(self, page: Page):
+        page.get_by_role("button", name=re.compile(r"(?i)add to basket")).click()
+        page.locator(
+            "#cart"
+        ).click()
+'''
+    assert objective.exercised_locator_count(code, {"test_a"}) == 2
+    assert objective.element_coverage(code) == 2
+    assert objective.test_function_names(code) == ["test_a"]
+
+
+def test_postprocess_keeps_invented_count_threshold():
+    # The rewrite of the invented `to_have_count_greater_than(N)` must preserve
+    # the threshold (count > N <=> element at index N exists), not weaken it to
+    # "first element visible".
+    from tcgen.util import postprocess_playwright_code
+
+    code = 'expect(page.locator(".card")).to_have_count_greater_than(3)'
+    fixed, fixes = postprocess_playwright_code(code)
+    assert fixed == 'expect((page.locator(".card")).nth(3)).to_be_attached()'
+    assert len(fixes) == 1
+
+    code = 'expect(page.locator(".row")).to_have_count(2, minimum=True, timeout=5000)'
+    fixed, fixes = postprocess_playwright_code(code)
+    assert fixed == 'expect((page.locator(".row")).nth(1)).to_be_attached()'
+    assert len(fixes) == 1
+
+    clean = 'expect(page.locator("body")).to_be_visible()'
+    fixed, fixes = postprocess_playwright_code(clean)
+    assert fixed == clean and fixes == []
+
+
 def test_ssr():
     assert objective.successful_steps_ratio(2, 2) == 1.0
     assert objective.successful_steps_ratio(1, 2) == 0.5
