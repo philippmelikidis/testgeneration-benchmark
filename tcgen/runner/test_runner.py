@@ -84,34 +84,15 @@ def _register_overlay_handlers(page):
         except Exception:
             pass
 
-    # Angular Material DROPDOWN/MENU overlays (mat-select like "Security Question",
-    # mat-menu) render a *transparent* CDK backdrop that, once open, intercepts the
-    # next click and makes the test time out with "<...> subtree intercepts pointer
-    # events". Press Escape to close the stray dropdown when its backdrop would
-    # block an action. Scoped to `.cdk-overlay-transparent-backdrop` ON PURPOSE:
-    # mat-DIALOGs use a *dark* backdrop (`.cdk-overlay-dark-backdrop`) and are left
-    # untouched, so tests that legitimately keep a product/detail dialog open are
-    # not disrupted. Harness-level -> applied identically to every pipeline.
-    def _esc_handler(*_a):
-        try:
-            page.keyboard.press("Escape")
-        except Exception:
-            pass
-
-    try:
-        page.add_locator_handler(
-            page.locator(".cdk-overlay-transparent-backdrop"),
-            _esc_handler, no_wait_after=True, times=3,
-        )
-    except TypeError:
-        try:
-            page.add_locator_handler(
-                page.locator(".cdk-overlay-transparent-backdrop"), _esc_handler)
-        except Exception:
-            pass
-    except Exception:
-        pass
-
+    # NOTE: the transparent CDK backdrop (mat-menu / mat-select) is handled by
+    # _KILL_TRANSPARENT_BACKDROP_JS (an init script that removes the node), NOT by
+    # a reactive Escape handler. Escape was WRONG: add_locator_handler fires the
+    # handler whenever the backdrop is merely VISIBLE — which it always is while a
+    # menu/dropdown/search overlay is open — so it pressed Escape and closed the
+    # very menu/search field the test was navigating (login/register items vanish;
+    # the search input detaches mid-fill -> "element was detached from the DOM").
+    # Removing only the backdrop node leaves the overlay pane (menu items, select
+    # options, search field) open and clickable, and nothing intercepts the click.
 
 # Disable CSS animations/transitions so Material ripples and route transitions
 # don't leave elements "unstable" (Playwright then retries a click until timeout
@@ -169,10 +150,39 @@ _KILL_COOKIECONSENT_JS = """
 """
 
 
+# Angular Material menus/dropdowns/selects (account menu, "Items per page",
+# "Security Question", the expanded search field) render a *transparent* CDK
+# backdrop whose ONLY job is to catch an outside-click to close the panel. While
+# open it sits over the whole page and intercepts the next click/fill, so tests
+# time out with "<...> intercepts pointer events". Removing just the backdrop
+# NODE (not the overlay pane) leaves the menu items / select options / search
+# field fully open and clickable while nothing can intercept — verified live that
+# it neither breaks the account menu -> login flow nor the (dark-backdrop)
+# product dialog. Scoped to `.cdk-overlay-transparent-backdrop` ON PURPOSE: modal
+# dialogs use `.cdk-overlay-dark-backdrop` and are left untouched. Harness-level,
+# applied identically to every pipeline (mirrors the cookie-ghost cleanup above).
+_KILL_TRANSPARENT_BACKDROP_JS = """
+(() => {{
+  const kill = () => document.querySelectorAll(
+    '.cdk-overlay-transparent-backdrop').forEach((n) => n.remove());
+  const start = () => {{
+    kill();
+    try {{
+      new MutationObserver(kill).observe(
+        document.documentElement, {{childList: true, subtree: true}});
+    }} catch (e) {{}}
+  }};
+  if (document.documentElement) start();
+  else document.addEventListener('DOMContentLoaded', start);
+}})();
+"""
+
+
 @pytest.fixture(autouse=True)
 def _harness(page):
     page.set_default_timeout({timeout})
-    for _script in (_PREDISMISS_JS, _KILL_COOKIECONSENT_JS, _NO_ANIM_JS):
+    for _script in (_PREDISMISS_JS, _KILL_COOKIECONSENT_JS,
+                    _KILL_TRANSPARENT_BACKDROP_JS, _NO_ANIM_JS):
         if not _script:
             continue
         try:
