@@ -104,6 +104,24 @@ _COUNT_MIN_RE = re.compile(
     r"""[^)]*minimum\s*=\s*True[^)]*\)""")
 
 
+# `expect(page).to_have_url("...")` with a STRING is an EXACT match. LLMs write a
+# regex-looking string (`.*#/login.*`) expecting a pattern match, so it fails even
+# when the URL is right ("expected '.*#/login.*', actual 'http://…/#/login'"). If
+# the string contains regex metacharacters, wrap it in re.compile — that is what
+# the model clearly intended (a pattern), turning a guaranteed miss into the
+# intended assertion. Plain-string URLs (no metachars) are left as exact matches.
+_URL_REGEX_RE = re.compile(
+    r"""\.to_have_url\(\s*r?(?P<q>['"])(?P<pat>[^'"]*?)(?P=q)\s*(?P<rest>[,)])""")
+_REGEX_META_RE = re.compile(r"[.*+?\[\]{}()|\\^$]")
+
+
+def _url_regex_repl(m: re.Match) -> str:
+    pat = m.group("pat")
+    if not _REGEX_META_RE.search(pat):
+        return m.group(0)  # literal URL -> keep exact match
+    return f'.to_have_url(re.compile(r"{pat}"){m.group("rest")}'
+
+
 def _count_gt_repl(m: re.Match) -> str:
     # count > N  <=>  the element at 0-based index N exists. `nth(N)` +
     # `to_be_attached()` is a WAITING assertion (handles async-rendered results)
@@ -149,6 +167,12 @@ def postprocess_playwright_code(code: str) -> tuple[str, list[str]]:
         r"\g<indent>expect((\g<loc>).first).to_be_visible()", code)
     if n:
         fixes.append(f"assert count()>0 -> expect(first).to_be_visible ({n}x)")
+    # subn counts every MATCH; literal URLs match too but _url_regex_repl leaves
+    # them unchanged, so gate the fix note on an actual change, not the count.
+    _before = code
+    code = _URL_REGEX_RE.sub(_url_regex_repl, code)
+    if code != _before:
+        fixes.append("to_have_url(regex-string) -> re.compile(...)")
     # Missing `import re` (models use re.compile for name=... regex locators).
     if re.search(r"\bre\.", code) and not re.search(r"^\s*import re\b", code, re.MULTILINE):
         lines = code.splitlines()
