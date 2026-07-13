@@ -1,5 +1,5 @@
 // Endpräsentation — Web-UI-Testfallgenerierung: LLM vs. traditionell
-// HS Reutlingen · Fricke / Melikidis · 15.07.2026
+// HHZ · Fricke / Melikidis · 15.07.2026 · Applied Machine Learning
 const pptxgen = require("pptxgenjs");
 const p = new pptxgen();
 p.layout = "LAYOUT_WIDE"; // 13.3 x 7.5
@@ -46,14 +46,14 @@ function kicker(s, txt, x, y, color) {
 // ---------------------------------------------------------------- 1  TITEL
 (() => {
   const s = p.addSlide(); s.background = { color: INK };
-  s.addText("Bachelorarbeit · Hochschule Reutlingen · 15.07.2026", { x: 0.7, y: 0.6, w: 9, h: 0.3, fontFace: MF, fontSize: 12, color: INKSOFT, charSpacing: 2 });
+  s.addText("Applied Machine Learning · HHZ · 15.07.2026", { x: 0.7, y: 0.6, w: 9, h: 0.3, fontFace: MF, fontSize: 12, color: INKSOFT, charSpacing: 2 });
   s.addText([
     { text: "Kann eine KI", options: { color: "FFFFFF", breakLine: true } },
     { text: "Web-UI-Tests schreiben?", options: { color: CORAL, breakLine: true } },
   ], { x: 0.66, y: 2.2, w: 9.6, h: 2.1, fontFace: TF, fontSize: 52, bold: true, lineSpacing: 54 });
   s.addText("Ein empirischer Vergleich: LLM-Agent gegen klassischen Crawler bei der automatischen Testfallgenerierung für Web-Oberflächen.",
     { x: 0.7, y: 4.5, w: 8.2, h: 0.9, fontFace: BF, fontSize: 17, color: INKSOFT, lineSpacing: 24 });
-  s.addText("Erik Fricke · Philippos Melikidis", { x: 0.7, y: 6.5, w: 8, h: 0.35, fontFace: BF, fontSize: 15, bold: true, color: "FFFFFF" });
+  s.addText("Timon Fricke · Philippos Melikidis", { x: 0.7, y: 6.5, w: 8, h: 0.35, fontFace: BF, fontSize: 15, bold: true, color: "FFFFFF" });
   // rechte Motiv-Spalte: die vier Artefakte
   const bx = 10.7, by = 2.35;
   ["C","L","S","H"].forEach((k, i) => {
@@ -323,9 +323,9 @@ function kicker(s, txt, x, y, color) {
   s.addShape("roundRect", { x: 8.75, y: 1.95, w: 3.85, h: 4.7, rectRadius: 0.12, fill: { color: INK }, line: { type: "none" }, shadow: softShadow() });
   s.addText("Ablesbar", { x: 9.05, y: 2.25, w: 3.3, h: 0.35, fontFace: MF, fontSize: 12, bold: true, color: CORAL });
   const pts = [
-    ["L schlägt C", "0.71 vs. 0.60 — der reine LLM-Agent liegt klar vorn."],
-    ["H gewinnt nicht", "Der Hybrid landet nur auf Crawler-Niveau (0.60)."],
-    ["Story hilft L nicht", "S (0.66) liegt unter L (0.71)."],
+    ["Methode 1 · C vs L", "Der LLM-Agent führt klar: 0.71 vs. 0.60."],
+    ["Methode 2 · S vs H", "Live-DOM (S 0.66) schlägt Crawler-Map (H 0.60)."],
+    ["Live schlägt statisch", "Beide Duelle gehen an die live erkundenden Agenten."],
   ];
   let y = 2.75;
   pts.forEach((r) => {
@@ -333,6 +333,32 @@ function kicker(s, txt, x, y, color) {
     s.addText(r[1], { x: 9.05, y: y+0.33, w: 3.3, h: 0.75, fontFace: BF, fontSize: 12.5, color: INKSOFT, margin: 0, lineSpacing: 17 });
     y += 1.25;
   });
+})();
+
+// ---------------------------------------------------------------- 12  METHODE 2: GROUNDING VERSAGT
+(() => {
+  const s = p.addSlide(); s.background = { color: PAPER };
+  kicker(s, "Methode 2 · Hybrid im Detail", 0.7, 0.6, CORAL);
+  s.addText("Grounding, das nicht greift", { x: 0.66, y: 0.95, w: 12, h: 0.7, fontFace: TF, fontSize: 30, bold: true, color: TEXT });
+  const stat = (x, k, big, biglab, small, smalllab, verdict) => {
+    const pi = PIPE[k];
+    s.addShape("roundRect", { x, y: 2.05, w: 5.85, h: 3.15, rectRadius: 0.12, fill: { color: "FBFBFC" }, line: { color: LINE, width: 1 }, shadow: softShadow() });
+    chip(s, x+0.3, 2.32, k, 1.55);
+    s.addText(pi.tag, { x: x+1.98, y: 2.32, w: 3.6, h: 0.42, fontFace: BF, fontSize: 14, bold: true, color: TEXT, valign: "middle", margin: 0 });
+    s.addText(big, { x: x+0.3, y: 2.95, w: 2.7, h: 1.0, fontFace: TF, fontSize: 54, bold: true, color: pi.col, margin: 0 });
+    s.addText(biglab, { x: x+0.3, y: 4.02, w: 2.75, h: 0.3, fontFace: BF, fontSize: 12, color: MUTED, margin: 0 });
+    s.addText(small, { x: x+3.2, y: 2.95, w: 2.4, h: 1.0, fontFace: TF, fontSize: 54, bold: true, color: TEXT, margin: 0 });
+    s.addText(smalllab, { x: x+3.2, y: 4.02, w: 2.35, h: 0.3, fontFace: BF, fontSize: 12, color: MUTED, margin: 0 });
+    s.addText(verdict, { x: x+0.3, y: 4.5, w: 5.25, h: 0.55, fontFace: BF, italic: true, fontSize: 12.5, color: pi.col, margin: 0, lineSpacing: 16 });
+  };
+  stat(0.7, "S", "0.66", "Functional Suitability", "42 s", "Gen-Zeit", "Live-DOM · 3 Seiten beobachtet · bester LLM-SSR (0.55).");
+  stat(6.75, "H", "0.47", "Functional Suitability", "221 s", "Gen-Zeit", "Crawler-Map · nur 1 Seite live · teuerste UND schwächste.");
+  s.addShape("roundRect", { x: 0.7, y: 5.5, w: 11.9, h: 1.15, rectRadius: 0.1, fill: { color: INK }, line: { type: "none" } });
+  s.addText([
+    { text: "Warum H verliert:  ", options: { bold: true, color: TEAL } },
+    { text: "H bekommt 212 verifizierte Crawler-Locator — hält sich aber nicht daran und erfindet Namen („Email address“ statt der echten „Text field for the login email“). Grounding wirkt nur als harte Constraint, nicht als bloßer Kontext.", options: { color: "FFFFFF" } },
+  ], { x: 1.0, y: 5.66, w: 11.3, h: 0.85, fontFace: BF, fontSize: 13.5, lineSpacing: 18, valign: "middle" });
+  s.addText("Zahlen: Juice Shop, 50 Wiederholungen.", { x: 0.7, y: 6.78, w: 6, h: 0.3, fontFace: BF, fontSize: 11, italic: true, color: MUTED });
 })();
 
 // ---------------------------------------------------------------- 13  DER TRADE-OFF
@@ -368,9 +394,9 @@ function kicker(s, txt, x, y, color) {
   kicker(s, "Kernbefunde", 0.7, 0.62, CORAL);
   s.addText("Drei belastbare Aussagen", { x: 0.66, y: 1.0, w: 11, h: 0.7, fontFace: TF, fontSize: 30, bold: true, color: "FFFFFF" });
   const f = [
-    ["LLM-Agent schlägt Crawler", "Der reine LLM-Agent übertrifft den klassischen Crawler deutlich — 0.71 vs. 0.60 ISO Functional Suitability.", CORAL],
-    ["Hybrid gewinnt nicht", "Crawler-Erdung + Story hebt die Suite nicht über den reinen Agenten. Die Hypothese wird nicht bestätigt.", TEAL],
-    ["Qualität vs. Zuverlässigkeit", "Der Crawler ist zuverlässig-aber-flach, der LLM-Agent aussagekräftig-aber-flakiger. Ein echter Trade-off.", AMBER],
+    ["Live schlägt statisch", "Beide Methoden-Duelle gehen an die live erkundenden Agenten: L > C (Methode 1), S > H (Methode 2).", CORAL],
+    ["„Grün“ ist nicht „gut“", "Der Crawler ist zu 100 % grün — über leere Smoke-Prüfungen. Pass-Rate und Assertion-Stärke immer zusammen lesen.", AMBER],
+    ["Grounding braucht Enforcement", "Die Crawler-Karte hilft nur, wenn sie die Locator-Wahl hart erzwingt. Als bloßer Kontext ignoriert das Modell sie.", TEAL],
   ];
   let y = 2.15;
   f.forEach((r, i) => {
@@ -431,7 +457,7 @@ function kicker(s, txt, x, y, color) {
   const s = p.addSlide(); s.background = { color: INK };
   s.addText("Danke.", { x: 0.66, y: 2.5, w: 9, h: 1.2, fontFace: TF, fontSize: 66, bold: true, color: "FFFFFF" });
   s.addText("Fragen & Diskussion", { x: 0.7, y: 3.9, w: 9, h: 0.6, fontFace: BF, fontSize: 22, color: CORAL });
-  s.addText("Erik Fricke · Philippos Melikidis   ·   Hochschule Reutlingen   ·   pytest · Playwright · ISO/IEC 25010",
+  s.addText("Timon Fricke · Philippos Melikidis   ·   HHZ   ·   pytest · Playwright · ISO/IEC 25010",
     { x: 0.7, y: 6.6, w: 12, h: 0.4, fontFace: MF, fontSize: 12, color: INKSOFT, charSpacing: 1 });
   ["C","L","S","H"].forEach((k, i) => chip(s, 9.7 + (i%2)*1.75, 2.75 + Math.floor(i/2)*0.62, k, 1.6));
 })();
