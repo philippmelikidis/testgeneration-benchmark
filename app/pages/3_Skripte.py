@@ -19,10 +19,21 @@ if not ids:
     st.info("Noch keine Experimente vorhanden.")
     st.stop()
 
+def _label(rid: str) -> str:
+    """'<ts>_<app>_<hex>' -> 'app · YYYY-MM-DD HH:MM · …hex' (Läufe pro App klar)."""
+    parts = rid.split("_")
+    ts = parts[0] if parts else rid
+    app = "_".join(parts[1:-1]) if len(parts) >= 3 else "?"
+    ts_fmt = (f"{ts[:4]}-{ts[4:6]}-{ts[6:8]} {ts[9:11]}:{ts[11:13]}"
+              if len(ts) >= 13 and "-" in ts else ts)
+    return f"{app} · {ts_fmt} · …{rid[-6:]}"
+
+
 default_id = st.session_state.get("last_record_id", ids[0])
 default_idx = ids.index(default_id) if default_id in ids else 0
-record_id = st.selectbox("Experiment", ids, index=default_idx)
+record_id = st.selectbox("Experiment (Lauf)", ids, index=default_idx, format_func=_label)
 record = store.load(record_id)
+st.caption(f"🎯 Ziel-App: **{record.app_name}** · Lauf `{record.id}`")
 
 results = [r for r in record.pipelines if r.script.code]
 if not results:

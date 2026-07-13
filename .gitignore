@@ -25,3 +25,23 @@ test-results/
 
 # Crawlee runtime scratch (request queues, key-value stores)
 storage/
+
+# Zwischen-Artefakte / Scratch (nicht ins Repo)
+ergebnis_*.md
+juiceshop_findings.html
+praesentation_ergebnisse.html
+praesentation_final.html
+PRAESENTATION_ERGEBNISSE.md
+Ergebnisbericht_*minimax*.pdf
+*.pdf.tmp
+outputs/
+
+# Office lock/temp files
+~$*
+
+# Presentation render scratch
+presentation/*.pdf
+
+# Interne Zwischen-Dokumente (nicht ins Repo)
+Empirisches_Design.pdf
+FAIRNESS_SETUP.md

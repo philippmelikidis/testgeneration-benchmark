@@ -191,11 +191,18 @@ class CrawleeCrawler:
                     if el.is_input:
                         value = _fill_value(el)
                         await loc.first.fill(value, timeout=1200)
+                        # Press Enter after EVERY fill — the standard form-submit
+                        # gesture, and the ONLY way to act on inputs without a
+                        # submit button (single-input entry fields, search boxes).
+                        # Generic (applied to every app / every text input), so the
+                        # crawler reaches states hidden behind "fill + submit"
+                        # instead of stalling on a typed-but-never-submitted field.
+                        # A partial multi-field form just yields harmless
+                        # exploration noise (filtered by the passing-test gating).
+                        await loc.first.press("Enter", timeout=1200)
+                        await page.wait_for_timeout(500)
                         chain = [Action(kind="fill", element=el, value=value,
-                                        submit=el.is_search)]
-                        if el.is_search:
-                            await loc.first.press("Enter", timeout=1200)
-                            await page.wait_for_timeout(500)
+                                        submit=True)]
                     elif el.tag != "a" and el.is_clickable:
                         # Same fallback the serialised script replays: normal
                         # click first, synthetic DOM click when actionability

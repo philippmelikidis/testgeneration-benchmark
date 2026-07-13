@@ -74,6 +74,22 @@ def test_postprocess_keeps_invented_count_threshold():
     assert fixed == clean and fixes == []
 
 
+def test_postprocess_wraps_regex_url_but_leaves_literal():
+    # A regex-looking string passed to to_have_url is an EXACT match and fails
+    # even on the right URL -> wrap in re.compile (the intended pattern match).
+    # A plain literal URL must stay an exact match.
+    from tcgen.util import postprocess_playwright_code
+
+    fixed, fixes = postprocess_playwright_code(
+        'def t(page):\n    expect(page).to_have_url(r".*#/login.*")\n')
+    assert 're.compile(r".*#/login.*")' in fixed
+    assert 'import re' in fixed
+
+    literal = 'expect(page).to_have_url("http://x/#/login")'
+    fixed2, fixes2 = postprocess_playwright_code(literal)
+    assert 're.compile' not in fixed2 and fixes2 == []
+
+
 def test_ssr():
     assert objective.successful_steps_ratio(2, 2) == 1.0
     assert objective.successful_steps_ratio(1, 2) == 0.5

@@ -96,10 +96,13 @@ user_stories:
   - id: "US-6"
     title: "Artikel in den Warenkorb legen"
     text: >
-      Als angemeldeter Kunde möchte ich ein Produkt in den Warenkorb legen,
+      Als Besucher möchte ich ein Produkt in den Warenkorb legen,
       damit ich es im Kaufprozess weiter verfolgen kann.
+    # Hinweis: Juice Shops Warenkorb ist session-basiert und erfordert KEINE
+    # Anmeldung (live verifiziert). Die frühere Login-Vorbedingung war sachlich
+    # falsch und zwang jeden Warenkorb-Test unnötig durch den fehleranfälligen
+    # Login-Flow — entfernt.
     acceptance_criteria:
-      - "Der Nutzer ist angemeldet (der Warenkorb erfordert eine Anmeldung)."
       - "Der 'In den Warenkorb'-Button ist auf einer Produktkarte klickbar."
       - "Nach dem Klick erscheint eine Bestätigungsmeldung."
       - "Das Warenkorb-Icon im Header zeigt mindestens 1 Artikel an."
@@ -108,11 +111,12 @@ user_stories:
   - id: "US-7"
     title: "Vollständiger Einkaufsprozess"
     text: >
-      Als angemeldeter Kunde möchte ich ein Produkt suchen, dessen Detailseite
+      Als Besucher möchte ich ein Produkt suchen, dessen Detailseite
       öffnen und es in den Warenkorb legen, damit ich den Kaufprozess von der
       Suche bis zum Warenkorb ohne Unterbrechung durchlaufen kann.
+    # Kein Login nötig (session-basierter Warenkorb, live verifiziert) — die
+    # frühere Anmelde-Vorbedingung war sachlich falsch und entfernt.
     acceptance_criteria:
-      - "Der Nutzer ist angemeldet (der Warenkorb erfordert eine Anmeldung)."
       - "Eine Suche nach 'Apple' liefert mindestens eine Produktkarte."
       - "Ein Klick auf die Produktkarte öffnet den Detail-Dialog mit Name und Preis."
       - "Über den Detail-Dialog lässt sich das Produkt in den Warenkorb legen."

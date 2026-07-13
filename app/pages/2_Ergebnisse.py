@@ -23,21 +23,56 @@ if not ids:
     st.info("Noch keine Experimente. Starte einen Lauf auf der Seite „Experiment starten“.")
     st.stop()
 
-default_id = st.session_state.get("last_record_id", ids[0])
-default_idx = ids.index(default_id) if default_id in ids else 0
-record_id = st.selectbox("Experiment", ids, index=default_idx)
+
+def _parse_id(rid: str) -> tuple[str, str]:
+    """(timestamp, app_key) from '<YYYYMMDD-HHMMSS>_<app_key>_<hex6>'."""
+    parts = rid.split("_")
+    ts = parts[0] if parts else rid
+    app = "_".join(parts[1:-1]) if len(parts) >= 3 else "?"
+    return ts, app
+
+
+def _fmt_ts(ts: str) -> str:
+    return (f"{ts[:4]}-{ts[4:6]}-{ts[6:8]} {ts[9:11]}:{ts[11:13]}"
+            if len(ts) >= 13 and "-" in ts else ts)
+
+
+_parsed = {rid: _parse_id(rid) for rid in ids}
+_apps = sorted({app for _, app in _parsed.values()})
+
+# App-Filter zuerst: Läufe sind pro Ziel-App getrennt gespeichert und werden nie
+# überschrieben — hier lassen sie sich klar auseinanderhalten.
+fcol, scol = st.columns([1, 2])
+with fcol:
+    app_filter = st.selectbox("Ziel-App", ["(alle Apps)"] + _apps,
+                              help="Jeder Lauf gehört zu genau einer App; Läufe "
+                                   "anderer Apps bleiben unangetastet.")
+visible = ids if app_filter == "(alle Apps)" else [
+    r for r in ids if _parsed[r][1] == app_filter]
+if not visible:
+    st.info("Keine Läufe für diese App.")
+    st.stop()
+
+default_id = st.session_state.get("last_record_id", visible[0])
+default_idx = visible.index(default_id) if default_id in visible else 0
+with scol:
+    record_id = st.selectbox(
+        "Experiment (Lauf)", visible, index=default_idx,
+        format_func=lambda r: f"{_parsed[r][1]} · {_fmt_ts(_parsed[r][0])} · …{r[-6:]}")
 
 dc1, dc2 = st.columns([1, 3])
 with dc1:
-    if st.button("Experiment löschen", help="Löscht diesen Ergebnis-Datensatz."):
+    if st.button("Experiment löschen", help="Löscht NUR diesen einen Ergebnis-Datensatz."):
         store.delete(record_id)
         st.session_state.pop("last_record_id", None)
         st.rerun()
 
 record = store.load(record_id)
 
-st.markdown(
-    f"**{record.app_name}** · Provider `{record.provider}` · Modell `{record.model}` · "
+# Prominenter App-Marker, damit sofort klar ist, zu welcher App dieser Lauf gehört.
+st.markdown(f"### 🎯 Ziel-App: {record.app_name}")
+st.caption(
+    f"Lauf `{record.id}` · Provider `{record.provider}` · Modell `{record.model}` · "
     f"{record.created_at}"
 )
 
