@@ -223,8 +223,11 @@ class Crawler:
         for el in state.elements:
             if el.is_input:
                 value = self._value_for(el)
-                # Submit search-like fields so result/detail states are reached.
-                act = Action(kind="fill", element=el, value=value, submit=el.is_search)
+                # Submit EVERY filled input with Enter (standard form gesture, and
+                # the only way to act on submit-button-less inputs such as
+                # single-input search/entry fields). Generic across apps, so
+                # result/detail/list states behind "fill + submit" are reached.
+                act = Action(kind="fill", element=el, value=value, submit=True)
             elif el.tag == "a":
                 if not self._followable_link(el.href):
                     continue
