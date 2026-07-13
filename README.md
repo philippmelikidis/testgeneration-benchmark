@@ -11,7 +11,7 @@ User-Stories steuern Methode 2 und dienen als gemeinsamer Bewertungsmaßstab
 | Crawler       | `Skript_C` | traditionell | autonomer Playwright-Crawler, Zustandsgraph → pytest-Skript; **ohne** User-Story |
 | LLM-Agent     | `Skript_L` | LLM-only     | gleiche Aufgabe wie der Crawler (App autonom erkunden, Testsuite erzeugen); **ohne** User-Story |
 | LLM-Agent+Story | `Skript_S` | LLM-only   | LLM-Agent erkundet die App **und** bekommt die User-Stories → testet sie direkt |
-| Hybrid        | `Skript_H` | Aufsatz      | LLM bekommt die **Crawler-Map** (entdeckte Routen + echte, verifizierte Locator aus `Skript_C`) **plus** User-Story (+ opt. Fachkontext) und schreibt damit *grounded* eine Story-Testsuite — nur reale Elemente, keine erfundenen Selektoren |
+| Hybrid        | `Skript_H` | Aufsatz      | **Grounded-Agent**: erkundet die App **live** wie `Skript_S`, ist aber mit der **Crawler-Map** (entdeckte Routen + echte, verifizierte Locator aus `Skript_C`) geseedet — navigiert damit gezielt (z. B. zu Login/Register) und erdet die Story-Testsuite in realen Selektoren statt erfundener |
 
 Ablation: `Skript_L` vs. `Skript_S` isoliert den Effekt der Anforderungen beim
 LLM-Agenten; `Skript_S` vs. `Skript_H` vergleicht „LLM erkundet selbst mit Story"
@@ -23,11 +23,19 @@ das exakt gleiche, anforderungsfreie Aufgabengebiet (App autonom erkunden und
 eine Testsuite erzeugen) — **keiner** von beiden sieht die User-Stories. So misst
 der Vergleich rein die Generierungsmethode auf identischer Aufgabe.
 
-**Methode 2 — Anforderungswissen kommt hier rein:** Der Hybrid erhält die
-User-Stories (und optional Fachkontext) **und** die Crawler-Map (entdeckte Routen
-+ echte, verifizierte Locator aus `Skript_C`) und schreibt damit *grounded* eine
-Story-Testsuite — er nutzt nur reale, vom Crawler bestätigte Elemente statt
-erfundener Selektoren. Hypothese: `Skript_H` schlägt `Skript_C` und `Skript_L`.
+**Methode 2 — Anforderungswissen kommt hier rein:** Der Hybrid ist ein **live
+explorierender LLM-Agent** (wie `Skript_S`), zusätzlich geseedet mit der
+Crawler-Map (entdeckte Routen + echte, verifizierte Locator aus `Skript_C`). Er
+klickt selbst durch, verifiziert Elemente am lebenden DOM und erdet die
+Story-Testsuite in realen, vom Crawler bestätigten Selektoren. Hypothese:
+`Skript_H` schlägt `Skript_C` und `Skript_L`.
+
+**Execute-verify-repair (alle LLM-Pipelines):** Nach der Synthese wird jede
+LLM-Suite ausgeführt; jeder rote Test wird mit seinem echten Playwright-Fehler
+ans Modell zurückgegeben, gezielt korrigiert und erneut ausgeführt (beste
+Pass-Rate gewinnt). Identisch für L/S/H; der deterministische Crawler ist
+ausgenommen. So schreiben die LLMs Tests iterativ — wie ein Entwickler — statt
+blind in einem Zug.
 
 > Bewertung: Die gemeinsame Metrik-Suite (inkl. DeepEval-Judge) nutzt die
 > User-Stories als **einheitlichen Maßstab für alle drei** Artefakte — auch für
@@ -149,22 +157,21 @@ docker run -d --name juiceshop -p 3000:3000 bkimminich/juice-shop
 # SPA unter http://localhost:3000
 ```
 
-Target: `config/targets/juiceshop.yaml` (Key `juiceshop`).
+Target: `config/targets/juiceshop.yaml` (Key `juiceshop`). Weitere Ziel-Apps
+lassen sich als zusätzliche YAML-Dateien im selben Ordner ergänzen.
 
-**OpenCart** — Hinweis: Die früher genutzten Bitnami-Images (`bitnami/opencart`)
-wurden im August 2025 nach `bitnamilegacy` verschoben und Ende September 2025
-abgeschaltet; `bitnami/opencart` ist nicht mehr ziehbar. Stattdessen ein
-gepflegtes Community-Image verwenden, z. B.:
+### 4. Crawler-Backend (optional)
+
+Zwei Backends, per `.env` umschaltbar:
 
 ```bash
-docker pull webkul/opencart        # oder: aamservices/opencart
+TCGEN_CRAWLER_BACKEND=bfs       # Default: klick-basierter Explorer (Klick-Pfad-Szenarien)
+TCGEN_CRAWLER_BACKEND=crawlee   # crawlee[playwright]: parallele Route-Discovery
 ```
 
-OpenCart erfordert beim ersten Start i. d. R. den Installations-Wizard; erst
-danach ist das Storefront unter der konfigurierten Base-URL erreichbar. Port und
-Base-URL ggf. in `config/targets/opencart.yaml` an das gewählte Image anpassen.
-
-Weitere Ziel-Apps (z. B. TodoMVC) als zusätzliche YAML-Dateien im selben Ordner.
+Für `crawlee` zusätzlich `pip install "crawlee[playwright]"`. Das Route-Discovery-
+Backend findet über Links auch tiefe Routen (Login/Register) schneller; `Skript_C`
+wird dabei zu Route-Smoke-Tests. `bfs` bleibt der reproduzierbare Default.
 
 ## Benutzung
 
@@ -264,13 +271,13 @@ Hallucination, Readability — je [0, 1].
 **ISO/IEC 25010 Functional Suitability** (Mapping gemäß SLR §9):
 - Functional Correctness ← mean(Judge-Correctness, Pass-Rate) — Pass-Rate
   **kontinuierlich**, kein binäres „ausführbar".
-- Functional Completeness ← genutzte Element-Coverage ÷ **Union der von ALLEN
-  Pipelines real ausgeführten Locator** (pipeline-neutraler „reachable &
-  verified"-Nenner, pro Experiment einheitlich). Damit definiert **nicht mehr der
-  Crawler allein** die Bezugsoberfläche: ein Element, das eine LLM-Pipeline
-  erreicht, der Crawler aber verpasst, zählt mit — der frühere Crawler-Bias im
-  Nenner entfällt. Nur falls nirgends etwas ausgeführt wurde, dient die
-  Crawler-Entdeckungszahl als Fallback.
+- Functional Completeness ← **Anteil der abgedeckten User-Stories** (ISO:
+  „covers all specified tasks and user objectives"). Eine Story gilt als abgedeckt,
+  wenn ein **bestandener** Test ihre Signatur-Elemente referenziert (pro Story in
+  der Ziel-YAML als `key_elements` hinterlegt — transparent, für alle Pipelines
+  identisch). Das löst den früheren „Anteil-aller-App-Elemente"-Nenner ab, der
+  fokussierte Story-Suiten strukturell auf ~0.1 drückte. Fallback (nur ohne
+  Story-Signaturen): genutzte Element-Coverage ÷ distinkte Crawler-Affordances.
 - Functional Appropriateness ← Judge-Appropriateness (für alle Pipelines gleich).
   Hallucination ist eine **eigenständige** Metrik (nicht in ISO eingerechnet) und
   beim Crawler **n/a** — strukturell nicht anwendbar, da er nur real erkundete
@@ -310,3 +317,14 @@ Lazy-Import-Grenzen (Kern importiert ohne Playwright/DeepEval/Streamlit).
 LLM-Judge-Bias (gleiche Modellfamilie für Generierung und Bewertung vermeiden),
 Größe des Skript-Korpus, Coverage-Normierung, Nichtdeterminismus der
 LLM-Generierung (Temperatur niedrig, Wiederholungen erwägen).
+
+## Artefakte
+
+- `presentation/Endpraesentation_LLM_vs_Crawler.pptx` — Endpräsentation (Quelle:
+  `presentation/build_deck.js`, reproduzierbar via `node build_deck.js`).
+- `Planning_SLR.pdf` — Systematic Literature Review, auf dem das Metrik-Mapping
+  (ISO/IEC 25010) beruht.
+
+Rohdaten der Läufe (`results/*.json`), generierte Skripte (`generated/`) und
+Crawlee-Scratch (`storage/`) sind bewusst **nicht** eingecheckt — sie entstehen
+reproduzierbar beim Ausführen.

@@ -182,7 +182,7 @@ class TargetApp(BaseModel):
     name: str
     base_url: str
     description: str = ""
-    # Optional credentials for apps that require login (e.g. OpenCart admin).
+    # Optional credentials for apps that require login (e.g. a shop test account).
     username: str | None = None
     password: str | None = None
     # Hints that help both pipelines stay on-task (not hard selectors).
