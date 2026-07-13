@@ -5,7 +5,7 @@ from tcgen.pipelines.crawler.state import Action, ElementDescriptor
 
 
 def _target():
-    return TargetApp(key="opencart", name="OpenCart Storefront",
+    return TargetApp(key="demoshop", name="Demo Shop",
                      base_url="http://localhost:8080")
 
 
@@ -15,7 +15,7 @@ def _crawl():
         Action(kind="goto", url="http://localhost:8080/"),
         Action(kind="click", element=link),
     ]
-    return CrawlOutput(app_key="opencart", scenarios=[scenario],
+    return CrawlOutput(app_key="demoshop", scenarios=[scenario],
                        n_states=3, n_edges=2, elapsed_s=1.0)
 
 

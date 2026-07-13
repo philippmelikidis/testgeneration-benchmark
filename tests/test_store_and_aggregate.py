@@ -12,7 +12,7 @@ from tcgen.orchestration.results_store import ResultsStore
 
 
 def _record():
-    script = GeneratedScript(pipeline=Pipeline.CRAWLER, app_key="opencart",
+    script = GeneratedScript(pipeline=Pipeline.CRAWLER, app_key="demoshop",
                              code="def test_x(page):\n    pass\n")
     result = PipelineResult(
         script=script,
@@ -22,8 +22,8 @@ def _record():
         iso=Iso25010(functional_correctness=0.8, functional_completeness=0.5,
                      functional_appropriateness=0.7),
     )
-    return ExperimentRecord(id="20260529-000000_opencart_abc123", app_key="opencart",
-                            app_name="OpenCart Storefront", provider="ollama",
+    return ExperimentRecord(id="20260529-000000_demoshop_abc123", app_key="demoshop",
+                            app_name="Demo Shop", provider="ollama",
                             model="qwen2.5-coder:7b", pipelines=[result])
 
 
@@ -47,7 +47,7 @@ def test_flatten_result_has_all_metric_columns():
 
 def test_record_rows_includes_app_context():
     rows = record_rows(_record())
-    assert rows[0]["app"] == "OpenCart Storefront"
+    assert rows[0]["app"] == "Demo Shop"
     assert rows[0]["pipeline"] == "crawler"
 
 
