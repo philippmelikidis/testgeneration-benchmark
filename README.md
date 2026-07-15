@@ -324,6 +324,8 @@ LLM-Generierung (Temperatur niedrig, Wiederholungen erwägen).
   `presentation/build_deck.js`, reproduzierbar via `node build_deck.js`).
 - `Planning_SLR.pdf` — Systematic Literature Review, auf dem das Metrik-Mapping
   (ISO/IEC 25010) beruht.
+- `reports/` — kuratierte Ergebnisberichte als Verlauf (frühe Baseline → finaler
+  Referenzlauf, inkl. TodoMVC-Generalisierung); siehe [`reports/README.md`](reports/README.md).
 
 Rohdaten der Läufe (`results/*.json`), generierte Skripte (`generated/`) und
 Crawlee-Scratch (`storage/`) sind bewusst **nicht** eingecheckt — sie entstehen
