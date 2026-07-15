@@ -46,6 +46,35 @@ Methode 1 (Crawler + LLM-Agent) ist der lauffähige Kern. Methode 2 (Hybrid)
 ist sauber abgegrenzt und wird pro Lauf zugeschaltet, ohne die Baseline zu
 verändern.
 
+## Eingrenzung (Scope)
+
+Was der Benchmark misst — und was bewusst **nicht**:
+
+- **Nur funktionale UI-Tests.** Alle Pipelines erzeugen End-to-End-Tests auf
+  UI-Ebene (Playwright, black-box). **Keine** Penetration-/Security-Tests
+  (Juice Shops absichtliche Schwachstellen sind nicht Testgegenstand), keine
+  Last-/Performance-Tests, keine Usability-/Accessibility-Prüfungen, keine
+  Unit- oder API-Tests.
+- **Bewertung ausschließlich ISO/IEC 25010 *Functional Suitability*** — gemessen
+  nach ISO/IEC 25023 auf Subcharakteristik-Ebene (Functional Correctness,
+  Completeness, Appropriateness), **ohne aggregierten Gesamtwert** (eine
+  Verdichtung erforderte begründete Gewichte nach ISO/IEC 25040). Andere
+  Qualitätscharakteristiken (Security, Performance Efficiency, Usability,
+  Maintainability, …) liegen außerhalb des Scopes.
+- **Eine Ziel-Anwendung.** Hauptergebnis auf OWASP Juice Shop (Angular-SPA);
+  Generalisierung nur intern angetestet ([reports/](reports/README.md)).
+- **Ein Modell-Setup pro Lauf.** Ein Generierungs- und ein Judge-Modell —
+  der Benchmark vergleicht *Generierungsmethoden*, nicht LLMs untereinander.
+- **Sechs User Stories** als Anforderungsbasis (Methode 2 und Bewertungs-
+  maßstab) — kein Anspruch auf vollständige fachliche Abdeckung der App.
+- **LLM-as-Judge statt menschlicher Ground-Truth.** Die semantischen Metriken
+  (G-Eval) sind modellbasiert; objektive Metriken (SSR, Coverage) gleichen das
+  teilweise aus.
+- **Nicht-Determinismus wird statistisch behandelt** (50 Wiederholungen,
+  Mittelwert ± Standardabweichung), nicht eliminiert.
+- **Momentaufnahme der Generierung.** Wartbarkeit, Test-Evolution und
+  Flakiness über Zeit/CI sind nicht Teil der Untersuchung.
+
 ## Architektur
 
 ```
@@ -337,8 +366,9 @@ LLM-Generierung (Temperatur niedrig, Wiederholungen erwägen).
 
 ## Artefakte
 
-- `presentation/Endpraesentation_LLM_vs_Crawler.pptx` — Endpräsentation (Quelle:
-  `presentation/build_deck.js`, reproduzierbar via `node build_deck.js`).
+- `presentation/Endpraesentation_LLM_vs_Crawler_v2.pptx` — Endpräsentation
+  (finale, manuell überarbeitete Fassung; `presentation/build_deck.js` ist der
+  ursprüngliche Generator der Basis-Version).
 - `Planning_SLR.pdf` — Systematic Literature Review, auf dem das Metrik-Mapping
   (ISO/IEC 25010) beruht.
 - `reports/` — kuratierte Ergebnisberichte als Verlauf (frühe Baseline → finaler
