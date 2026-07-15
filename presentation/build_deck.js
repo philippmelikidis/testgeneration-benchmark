@@ -224,7 +224,7 @@ function kicker(s, txt, x, y, color) {
   // rechts: ISO drei Subcharakteristiken
   s.addShape("roundRect", { x: 7.0, y: 2.05, w: 5.6, h: 4.25, rectRadius: 0.12, fill: { color: INK }, line: { type: "none" }, shadow: softShadow() });
   s.addText("Functional Suitability", { x: 7.3, y: 2.32, w: 5, h: 0.4, fontFace: TF, fontSize: 20, bold: true, color: "FFFFFF" });
-  s.addText("Mittel aus drei Subcharakteristiken", { x: 7.3, y: 2.78, w: 5, h: 0.3, fontFace: BF, fontSize: 12.5, color: INKSOFT });
+  s.addText("drei Subcharakteristiken — einzeln berichtet (ISO 25023), kein Gesamtscore", { x: 7.3, y: 2.78, w: 5, h: 0.3, fontFace: BF, fontSize: 12.5, color: INKSOFT });
   const iso = [
     ["Correctness", "Halten die Prüfungen? (Pass-Rate + Judge)"],
     ["Completeness", "Wie viel der geforderten Stories wird verifiziert?"],
@@ -265,6 +265,8 @@ function kicker(s, txt, x, y, color) {
     { x: 7.95, y: 2.85, w: 4.4, h: 2.0, fontFace: BF, fontSize: 15, color: INKSOFT, margin: 0, lineSpacing: 21 });
   s.addText("Lokal per Docker gehostet — reproduzierbar, offline, ohne Rate-Limits.",
     { x: 7.95, y: 5.4, w: 4.4, h: 0.8, fontFace: BF, italic: true, fontSize: 13.5, color: "FFFFFF", margin: 0, lineSpacing: 19 });
+  s.addText("Scope: ausschließlich funktionale UI-Tests — die absichtlichen Schwachstellen der App sind nicht Testgegenstand (keine Security-/Last-/Usability-Tests).",
+    { x: 0.7, y: 6.55, w: 12, h: 0.5, fontFace: BF, italic: true, fontSize: 13, color: MUTED, lineSpacing: 17 });
 })();
 
 // ---------------------------------------------------------------- 9  LIVE DEMO (dunkel, Sektion)
@@ -310,22 +312,29 @@ function kicker(s, txt, x, y, color) {
 (() => {
   const s = p.addSlide(); s.background = { color: PAPER };
   kicker(s, "Ergebnisse · 50 Wiederholungen", 0.7, 0.55, CORAL);
-  s.addText("Juice Shop: der LLM-Agent führt", { x: 0.66, y: 0.9, w: 8.5, h: 0.7, fontFace: TF, fontSize: 29, bold: true, color: TEXT });
-  s.addChart(p.ChartType.bar, [{ name: "ISO Functional Suitability", labels: ["Skript_L", "Skript_S", "Skript_C", "Skript_H"], values: [0.709, 0.656, 0.600, 0.600] }], {
+  s.addText("Juice Shop: drei Subcharakteristiken, ein Muster", { x: 0.66, y: 0.9, w: 8.5, h: 0.7, fontFace: TF, fontSize: 29, bold: true, color: TEXT });
+  // ISO 25023 misst nur auf Subcharakteristik-Ebene — kein aggregierter Score.
+  s.addChart(p.ChartType.bar, [
+    { name: "Skript_L", labels: ["Correctness", "Completeness", "Appropriateness"], values: [0.67, 0.56, 0.89] },
+    { name: "Skript_S", labels: ["Correctness", "Completeness", "Appropriateness"], values: [0.67, 0.54, 0.76] },
+    { name: "Skript_C", labels: ["Correctness", "Completeness", "Appropriateness"], values: [0.90, 0.50, 0.40] },
+    { name: "Skript_H", labels: ["Correctness", "Completeness", "Appropriateness"], values: [0.62, 0.47, 0.71] },
+  ], {
     x: 0.7, y: 1.85, w: 7.7, h: 4.9, barDir: "col", chartColors: [CORAL, AMBER, SLATE, TEAL],
-    showValue: true, dataLabelPosition: "outEnd", dataLabelFormatCode: "0.00", dataLabelFontSize: 13, dataLabelFontFace: BF, dataLabelColor: TEXT, dataLabelFontBold: true,
-    valAxisMinVal: 0, valAxisMaxVal: 0.8, valAxisMajorUnit: 0.2, showValAxisTitle: false,
+    showValue: true, dataLabelPosition: "outEnd", dataLabelFormatCode: "0.00", dataLabelFontSize: 9, dataLabelFontFace: BF, dataLabelColor: TEXT, dataLabelFontBold: true,
+    valAxisMinVal: 0, valAxisMaxVal: 1.0, valAxisMajorUnit: 0.2, showValAxisTitle: false,
     catAxisLabelColor: TEXT, catAxisLabelFontSize: 13, catAxisLabelFontBold: true, catAxisLabelFontFace: MF,
     valAxisLabelColor: MUTED, valAxisLabelFontSize: 10, valGridLine: { color: LINE, size: 1 }, catGridLine: { style: "none" },
-    showLegend: false, showTitle: false, barGapWidthPct: 55,
+    showLegend: true, legendPos: "b", legendFontSize: 11, legendFontFace: MF, legendColor: TEXT,
+    showTitle: false, barGapWidthPct: 40,
   });
   // rechte Deutung
   s.addShape("roundRect", { x: 8.75, y: 1.95, w: 3.85, h: 4.7, rectRadius: 0.12, fill: { color: INK }, line: { type: "none" }, shadow: softShadow() });
   s.addText("Ablesbar", { x: 9.05, y: 2.25, w: 3.3, h: 0.35, fontFace: MF, fontSize: 12, bold: true, color: CORAL });
   const pts = [
-    ["Methode 1 · C vs L", "Der LLM-Agent führt klar: 0.71 vs. 0.60."],
-    ["Methode 2 · S vs H", "Live-DOM (S 0.66) schlägt Crawler-Map (H 0.60)."],
-    ["Live schlägt statisch", "Beide Duelle gehen an die live erkundenden Agenten."],
+    ["Kein Gesamtscore", "ISO 25023 misst nur die drei Subcharakteristiken — hier einzeln, ungewichtet."],
+    ["Methode 1 · C vs L", "C holt Correctness nur über triviale Grün-Checks; L führt bei Completeness & Appropriateness."],
+    ["Methode 2 · S vs H", "Live-DOM (S) vor Crawler-Map (H) in allen drei Dimensionen."],
   ];
   let y = 2.75;
   pts.forEach((r) => {
@@ -351,8 +360,8 @@ function kicker(s, txt, x, y, color) {
     s.addText(smalllab, { x: x+3.2, y: 4.02, w: 2.35, h: 0.3, fontFace: BF, fontSize: 12, color: MUTED, margin: 0 });
     s.addText(verdict, { x: x+0.3, y: 4.5, w: 5.25, h: 0.55, fontFace: BF, italic: true, fontSize: 12.5, color: pi.col, margin: 0, lineSpacing: 16 });
   };
-  stat(0.7, "S", "0.66", "Functional Suitability", "42 s", "Gen-Zeit", "Live-DOM · 3 Seiten beobachtet · bester LLM-SSR (0.55).");
-  stat(6.75, "H", "0.47", "Functional Suitability", "221 s", "Gen-Zeit", "Crawler-Map · nur 1 Seite live · teuerste UND schwächste.");
+  stat(0.7, "S", "0.55", "SSR (Pass-Rate)", "42 s", "Gen-Zeit", "Live-DOM · 3 Seiten beobachtet · vorn in allen drei ISO-Subcharakteristiken.");
+  stat(6.75, "H", "0.47", "SSR (Pass-Rate)", "221 s", "Gen-Zeit", "Crawler-Map · nur 1 Seite live · teuerste UND schwächste.");
   s.addShape("roundRect", { x: 0.7, y: 5.5, w: 11.9, h: 1.15, rectRadius: 0.1, fill: { color: INK }, line: { type: "none" } });
   s.addText([
     { text: "Warum H verliert:  ", options: { bold: true, color: TEAL } },

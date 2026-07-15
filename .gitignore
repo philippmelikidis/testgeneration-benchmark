@@ -49,3 +49,4 @@ presentation/*.pdf
 # Interne Zwischen-Dokumente (nicht ins Repo)
 Empirisches_Design.pdf
 FAIRNESS_SETUP.md
+node_modules/
