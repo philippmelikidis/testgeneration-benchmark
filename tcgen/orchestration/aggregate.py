@@ -21,7 +21,6 @@ _STAT_KEYS = [
     "gen_time_s", "n_tests", "ssr", "exercised_coverage", "element_coverage",
     "flakiness", "duration_s", "correctness", "appropriateness", "hallucination",
     "readability", "iso_correctness", "iso_completeness", "iso_appropriateness",
-    "iso_overall",
 ]
 
 # (column key, human label, "higher is better"?)
@@ -39,10 +38,11 @@ METRIC_COLUMNS: list[tuple[str, str, bool | None]] = [
     ("appropriateness", "Judge: Appropriateness", True),
     ("hallucination", "Judge: Hallucination", False),
     ("readability", "Judge: Readability", True),
-    ("iso_correctness", "ISO: Correctness", True),
-    ("iso_completeness", "ISO: Completeness", True),
-    ("iso_appropriateness", "ISO: Appropriateness", True),
-    ("iso_overall", "ISO: Functional Suitability", True),
+    # Functional Suitability per ISO/IEC 25023: measured at sub-characteristic
+    # level only — no combined score (see Iso25010 docstring).
+    ("iso_correctness", "ISO: Functional Correctness", True),
+    ("iso_completeness", "ISO: Functional Completeness", True),
+    ("iso_appropriateness", "ISO: Functional Appropriateness", True),
 ]
 
 
@@ -67,7 +67,6 @@ def flatten_result(result: PipelineResult) -> dict:
         "iso_correctness": iso.functional_correctness,
         "iso_completeness": iso.functional_completeness,
         "iso_appropriateness": iso.functional_appropriateness,
-        "iso_overall": iso.overall,
         "error": result.error,
     }
 

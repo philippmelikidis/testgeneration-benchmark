@@ -35,7 +35,9 @@ def test_results_store_roundtrip(tmp_path):
     loaded = store.load(rec.id)
     assert loaded.id == rec.id
     assert loaded.pipelines[0].script.pipeline is Pipeline.CRAWLER
-    assert loaded.pipelines[0].iso.overall is not None
+    assert loaded.pipelines[0].iso.functional_correctness == 0.8
+    # Per ISO/IEC 25023 there is no combined characteristic-level score.
+    assert not hasattr(loaded.pipelines[0].iso, "overall")
 
 
 def test_flatten_result_has_all_metric_columns():
@@ -65,4 +67,8 @@ def test_record_to_markdown_is_complete():
     assert "Vergleichstabelle" in md
     assert "Skript_C" in md
     assert "```python" in md           # generated script included
-    assert "ISO: Functional Suitability" in md
+    # Sub-characteristics only — no combined score (ISO/IEC 25023).
+    assert "ISO: Functional Correctness" in md
+    assert "ISO: Functional Completeness" in md
+    assert "ISO: Functional Appropriateness" in md
+    assert "ISO: Functional Suitability |" not in md

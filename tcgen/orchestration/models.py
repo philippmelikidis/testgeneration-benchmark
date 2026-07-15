@@ -107,24 +107,19 @@ class JudgeScores(BaseModel):
 
 
 class Iso25010(BaseModel):
-    """Functional-Suitability sub-characteristics per ISO/IEC 25010, in [0, 1]."""
+    """Functional-Suitability sub-characteristics per ISO/IEC 25010, in [0, 1].
+
+    Deliberately NO combined "overall" score: ISO/IEC 25010 defines only the
+    quality model, and ISO/IEC 25023 measures exclusively at sub-characteristic
+    level (X = 1 - A/B ratios). Collapsing the three into an unweighted mean
+    would assert an equal-importance weighting that the standard reserves for
+    an explicit, stakeholder-justified evaluation spec (ISO/IEC 25040) — so the
+    three sub-characteristics are reported side by side instead.
+    """
 
     functional_correctness: float | None = None
     functional_completeness: float | None = None
     functional_appropriateness: float | None = None
-
-    @property
-    def overall(self) -> float | None:
-        vals = [
-            v
-            for v in (
-                self.functional_correctness,
-                self.functional_completeness,
-                self.functional_appropriateness,
-            )
-            if v is not None
-        ]
-        return round(sum(vals) / len(vals), 4) if vals else None
 
 
 class PipelineResult(BaseModel):
