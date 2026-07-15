@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Juice Shop d66cf0 — Alle Vergleiche (50 Wiederholungen)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0d1020; --card:#161b2e; --card2:#1e2440; --ink:#e8ebf5; --muted:#9aa3c0;
+    --grid:#2a3155; --c:#5b8def; --l:#48c78e; --s:#f5a623; --h:#e0518a; --accent:#7c5cff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:linear-gradient(160deg,#0d1020,#141a33);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.55}
+  .wrap{max-width:1140px;margin:0 auto;padding:30px 20px 70px}
+  h1{font-size:27px;margin:0 0 6px}
+  .sub{color:var(--muted);font-size:14px}
+  .chips{display:flex;flex-wrap:wrap;gap:9px;margin:16px 0}
+  .chip{background:var(--card);border:1px solid var(--grid);border-radius:999px;padding:6px 12px;font-size:12.5px;color:var(--muted)}
+  .chip b{color:var(--ink)}
+  .nav{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 6px}
+  .nav a{font-size:12.5px;text-decoration:none;color:#cdd5ee;background:var(--card2);border:1px solid var(--grid);padding:6px 11px;border-radius:8px}
+  .nav a:hover{border-color:var(--accent)}
+  .frame{background:#20182f;border:1px solid #4a3a7a;border-radius:12px;padding:14px 16px;font-size:13.5px;color:#e4d9f7;margin:14px 0}
+  .frame b{color:#fff}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:18px}
+  @media(max-width:820px){.kpis{grid-template-columns:repeat(2,1fr)}}
+  .kpi{background:var(--card);border:1px solid var(--grid);border-radius:16px;padding:15px;position:relative;overflow:hidden}
+  .kpi .lbl{font-size:12px;color:var(--muted)}
+  .kpi .val{font-size:24px;font-weight:800;margin-top:5px}
+  .kpi .tag{font-size:11.5px;margin-top:5px;color:var(--muted)}
+  .kpi .bar{position:absolute;left:0;top:0;height:4px;width:100%}
+  h2.sec{font-size:21px;margin:44px 0 2px;padding-top:10px;border-top:1px solid var(--grid)}
+  h2.sec .tag{font-size:12px;font-weight:600;color:var(--muted);background:var(--card2);border:1px solid var(--grid);padding:3px 9px;border-radius:7px;margin-left:8px;vertical-align:middle}
+  .q{color:#cdd5ee;font-size:14px;margin:6px 0 0}
+  .sec-sub{color:var(--muted);font-size:13px;margin:2px 0 0}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin:10px 0 0}
+  .dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:middle}
+  .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px;margin-top:16px}
+  .card{background:var(--card);border:1px solid var(--grid);border-radius:16px;padding:18px}
+  .card h3{margin:0 0 3px;font-size:15px}
+  .card .cap{color:var(--muted);font-size:12px;margin:0 0 12px}
+  .col-6{grid-column:span 6}.col-5{grid-column:span 5}.col-7{grid-column:span 7}.col-12{grid-column:span 12}
+  @media(max-width:840px){.col-6,.col-5,.col-7{grid-column:span 12}}
+  canvas{max-height:330px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--grid)}
+  th:first-child,td:first-child{text-align:left}
+  thead th{color:var(--muted);font-weight:600;font-size:12px}
+  tbody tr:hover{background:var(--card2)}
+  .win{color:#7dffb3;font-weight:700}
+  ul.why li,ul.take li{margin-bottom:10px;font-size:13.7px}
+  ul.why b,ul.take b{color:#fff}
+  code{background:#0e1424;border:1px solid var(--grid);border-radius:5px;padding:1px 5px;font-size:12px;color:#bcd0ff}
+  .pill{display:inline-block;background:#2a2140;border:1px solid #4a3a7a;color:#d9cdf5;border-radius:6px;padding:1px 7px;font-size:12px;font-weight:700;margin-right:4px}
+  .flag{background:#3a2018;border:1px solid #7a4a3a;border-radius:10px;padding:11px 14px;font-size:13px;color:#f7ddd0;margin-top:12px}
+  .flag b{color:#ffd9c4}
+  footer{color:var(--muted);font-size:12px;margin-top:44px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>OWASP Juice Shop (d66cf0) — Alle Vergleiche</h1>
+  <div class="sub">Lauf mit <b>50 Wiederholungen</b> pro LLM-Pipeline · Mittel ± Std · aktiver Runtime-Repair</div>
+  <div class="chips">
+    <span class="chip">Experiment: <b>20260709-214648_juiceshop_d66cf0</b></span>
+    <span class="chip">Modell: <b>kimi-k2.7-code</b> · Judge <b>glm-5.2</b> (out-of-family)</span>
+    <span class="chip">Wiederholungen: <b>50×</b> (C: 1×, deterministisch)</span>
+    <span class="chip">Stories: <b>US-1,2,3,5,6,7</b> · Coverage-Nenner: <b>207</b></span>
+  </div>
+
+  <div class="frame">
+    <b>Leseregel.</b> Judge-basierte Kennzahlen (Correctness, Appropriateness, Hallucination, Readability, Functional Suitability) nur <b>innerhalb</b> einer Methode vergleichen: C &amp; L intrinsisch (Methode 1), S &amp; H story-aware (Methode 2). SSR &amp; Completeness sind ausführungsbasiert und methodenübergreifend lesbar. Alle ± = Std über 50 Läufe.
+    <div class="legend" style="margin-top:10px">
+      <span><span class="dot" style="background:var(--c)"></span>C · crawler</span>
+      <span><span class="dot" style="background:var(--l)"></span>L · llm_agent</span>
+      <span><span class="dot" style="background:var(--s)"></span>S · llm_agent_story</span>
+      <span><span class="dot" style="background:var(--h)"></span>H · hybrid</span>
+    </div>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi"><div class="bar" style="background:var(--l)"></div>
+      <div class="lbl">Höchste Functional Suitability</div><div class="val">0.709</div><div class="tag">Skript_L · schlägt C (0.600) &amp; S (0.656)</div></div>
+    <div class="kpi"><div class="bar" style="background:var(--s)"></div>
+      <div class="lbl">Höchster SSR (LLM) &amp; schnellste Gen.</div><div class="val">0.550 · 42 s</div><div class="tag">Skript_S — bester LLM-Allrounder dieses Laufs</div></div>
+    <div class="kpi"><div class="bar" style="background:var(--h)"></div>
+      <div class="lbl">H: teuerste &amp; schwächste Pipeline</div><div class="val">221 s · 0.470</div><div class="tag">inkl. 184.8 s Crawl · Grounding missachtet</div></div>
+    <div class="kpi"><div class="bar" style="background:var(--c)"></div>
+      <div class="lbl">Einzige „alle grün"</div><div class="val">SSR 1.000</div><div class="tag">C (30 Tests) — via leere Smoke-Assertions</div></div>
+  </div>
+
+  <div class="nav">
+    <a href="#cl">① C vs L</a>
+    <a href="#sh">② S vs H</a>
+    <a href="#ssr">③ Alle vier — SSR</a>
+    <a href="#ls">④ L vs S — Story-Effekt</a>
+    <a href="#befunde">Befunde je Pipeline</a>
+    <a href="#varianz">Stabilität / Varianz</a>
+    <a href="#synth">⑤ Roter Faden</a>
+    <a href="#tbl">Datentabelle</a>
+  </div>
+
+  <div class="flag">
+    <b>Das Muster dieses Laufs:</b> Anders als im früheren e6901d-Lauf ist H hier <b>nicht</b> SSR-Sieger, sondern Schlusslicht (0.470). Grund: H erhält 212 gecrawlte Locators als Grounding, <b>hält sich aber nicht daran</b> — es halluziniert Accessible Names (<code>"Email address"</code>, <code>"Log in"</code> statt der gecrawlten <code>"Text field for the login email"</code>) und asserted brüchige Exakt-Texte. C's SSR 1.000 bleibt das bekannte <code>to_be_attached()</code>-Artefakt.
+  </div>
+
+  <!-- 1) C vs L -->
+  <h2 class="sec" id="cl">① Crawler vs. LLM-Agent <span class="tag">Methode 1 · beide intrinsisch · alle Achsen vergleichbar</span></h2>
+  <p class="q"><b>Frage:</b> Schlägt der LLM-Agent den Crawler bei identischer, requirement-freier Aufgabe?</p>
+  <div class="grid">
+    <div class="card col-5"><h3>Profil (0–1, ↑ besser)</h3><p class="cap">beide intrinsisch bewertet</p><canvas id="clRadar"></canvas></div>
+    <div class="card col-7"><h3>Kernachsen mit Streuung</h3><p class="cap">C gewinnt SSR &amp; rohe Elementzahl — mit leeren Assertions</p><canvas id="clBars"></canvas></div>
+    <div class="card col-12">
+      <ul class="why">
+        <li><b>C's SSR = 1.000 ist ein Assertion-Artefakt.</b> Alle 30 Pfad-Szenarien enden mit <code>expect(page.locator("body")).to_be_attached()</code> — kann faktisch nicht rot werden. Deshalb Appropriateness 0.400 und Readability 0.400 (generische <code>test_scenario_1..30</code>, identische redundante Kommentare, brüchige CSS wie <code>#mat-input-0</code>).</li>
+        <li><b>L gewinnt alle Qualitätsachsen:</b> Appropriateness 0.894 vs. 0.400, Readability 0.904 vs. 0.400, Completeness 0.563 vs. 0.500, FuncSuit <b>0.709 vs. 0.600</b>. L exploriert live 6 Seiten in 19 Agent-Steps und schreibt sichtbarkeits-/zustandsbasierte Assertions statt Smoke-Checks.</li>
+        <li><b>Aber: C's rohe Element-Abdeckung ist hier höher</b> (genutzt 32 vs. 21) — 30 grüne Mini-Szenarien berühren viele Elemente, verifizieren aber nichts. Zusammen mit ISO-Correctness 0.900 (SSR fließt ein) zeigt das erneut: quantitative Achsen ohne Assertion-Stärke-Signal überzeichnen C.</li>
+        <li><b>L's SSR 0.523 hat eine belegbare Ursache:</b> Meta zeigt <code>ssr_before_repair 0.667 → 0.889</code> über 2 Repair-Runden (63 s) — mechanische Fehler sind reparierbar. Erster Fehler: <code>button "Force page reload"</code>, ein Angular-Error-Toast, der Klicks blockiert (Umgebungs-, kein Locator-Problem).</li>
+      </ul>
+      <div class="flag"><b>Erkenntnis:</b> Der LLM-Agent ist der bessere Test-<i>Generator</i> (FuncSuit +18 %, alle Judge-Achsen), der Crawler der breitere Element-<i>Toucher</i>. C's perfekter SSR ist inhaltsleer. <span style="color:#f7ddd0">Caveat: C deterministisch/1×, Hallucination n/a.</span></div>
+    </div>
+  </div>
+
+  <!-- 2) S vs H -->
+  <h2 class="sec" id="sh">② Grounding: Live-DOM vs. Crawler-Map <span class="tag">Methode 2 · beide story-aware · alle Achsen vergleichbar</span></h2>
+  <p class="q"><b>Frage:</b> Verifiziert story-aware Generierung besser mit Live-DOM (S) oder Crawler-Map (H)?</p>
+  <div class="grid">
+    <div class="card col-5"><h3>Profil (0–1, ↑ besser)</h3><p class="cap">beide story-aware · Groundedness = 1−Halluzination</p><canvas id="shRadar"></canvas></div>
+    <div class="card col-7"><h3>SSR &amp; Gen-Zeit — Mittel + Streuung</h3><p class="cap">H zahlt den vollen Crawl-Preis (184.8 s) und verliert trotzdem</p><canvas id="shBars"></canvas></div>
+    <div class="card col-12">
+      <ul class="why">
+        <li><b>S schlägt H auf jeder Achse:</b> SSR 0.550 vs. 0.470, Correctness 0.782 vs. 0.770, Completeness 0.543 vs. 0.467, FuncSuit <b>0.656 vs. 0.600</b> — bei einem Fünftel der Gen-Zeit (42 s vs. 221 s, davon 184.8 s Crawl laut <code>exploration_time_s</code>).</li>
+        <li><b>H's Kernproblem ist belegbar im Code:</b> Trotz <code>grounded_locators=212</code> nutzt H erfundene Namen — <code>get_by_role("textbox", name="Email address")</code>, <code>name="Password"</code>, <code>name="Log in"</code>, <code>menuitem "Not yet a customer?"</code> (im Katalog ein <i>Link</i>, kein Menuitem). Meta: <code>ssr_before_repair 0.333 → 0.333</code> — Repair kann halluzinierte Namen nicht heilen. Dazu brüchige Exakt-Assertions (<code>"Placed Apple Juice (1000ml) into basket."</code>).</li>
+        <li><b>Warum das Grounding versagt:</b> H beobachtet nur <b>1 Seite live</b> (<code>pages_observed=1</code>, S: 3) und verlässt sich auf den statischen Katalog — der aber offenbar nicht hart in die Locator-Wahl gezwungen wird. Statisches Grounding <i>ersetzt</i> hier Live-Verifikation, statt sie zu ergänzen.</li>
+        <li><b>Halluzination diesmal fast gleich</b> (S 0.142, H 0.146) — der frühere „H wirkt sauberer"-Effekt ist weg, weil H hier aktiv vom Katalog abweicht statt eng an ihm zu kleben.</li>
+      </ul>
+      <div class="flag"><b>Erkenntnis:</b> Bei gleicher Story-Vorgabe gewinnt Live-DOM-Grounding (S) klar. H ist teuerste und schwächste Pipeline zugleich — der Crawler-Katalog wirkt nur, wenn er als harte Constraint durchgesetzt wird.</div>
+    </div>
+  </div>
+
+  <!-- 3) 4-way SSR -->
+  <h2 class="sec" id="ssr">③ Alle vier nach SSR <span class="tag">einzige methodenneutrale Achse</span></h2>
+  <p class="q"><b>Frage:</b> Wie ordnen sich alle vier auf der einen Kennzahl, die über beide Methoden fair ist?</p>
+  <div class="grid">
+    <div class="card col-6"><h3>SSR — Pass-Rate</h3><p class="cap">↑ · Fehlerbalken = Std (C: 1×)</p><canvas id="ssr4"></canvas></div>
+    <div class="card col-6"><h3>Completeness (ISO)</h3><p class="cap">↑ · mit Streuung</p><canvas id="comp4"></canvas></div>
+    <div class="card col-12">
+      <ul class="why">
+        <li><b>Rangfolge C (1.000) &gt; S (0.550) &gt; L (0.523) &gt; H (0.470):</b> Die drei LLM-Pipelines liegen innerhalb einer Standardabweichung voneinander — nur C's Artefakt-SSR und H's Abfall sind belastbare Unterschiede.</li>
+        <li><b>Completeness dreht das Bild:</b> L 0.563 &gt; S 0.543 &gt; C 0.500 &gt; H 0.467. Der breit explorierende Live-Agent deckt die Anforderungen am vollständigsten ab; H trotz 212-Locator-Katalog am schlechtesten.</li>
+        <li><b>Alle LLM-SSR streuen stark</b> (±0.16–0.19): Die SPA-Umgebung (Error-Toast <code>Force page reload</code>, Welcome-Banner-Overlay) macht identischen Code mal grün, mal rot — ein Reproduzierbarkeits-, kein reines Generierungsproblem.</li>
+      </ul>
+      <div class="flag"><b>Erkenntnis:</b> „Alle Tests grün" (nur C) ist erneut das schwächste Ergebnis. SSR nur zusammen mit Completeness/Assertion-Stärke ranken.</div>
+    </div>
+  </div>
+
+  <!-- 4) L vs S -->
+  <h2 class="sec" id="ls">④ Story-Effekt: L vs S <span class="tag">nur ausführungsbasiert · Rubrik wechselt</span></h2>
+  <p class="q"><b>Frage:</b> Was ändert sich, wenn derselbe Live-Agent zusätzlich die Stories bekommt?</p>
+  <div class="grid">
+    <div class="card col-6"><h3>SSR &amp; Completeness</h3><p class="cap">0–1, mit Streuung</p><canvas id="lsA"></canvas></div>
+    <div class="card col-6"><h3>Umfang: #Tests &amp; genutzte Coverage</h3><p class="cap">absolute Zahlen</p><canvas id="lsB"></canvas></div>
+    <div class="card col-12">
+      <ul class="why">
+        <li><b>Stories kosten hier keine Pass-Rate</b> (SSR 0.523 vs. 0.550, statistisch gleich), <b>aber Breite:</b> #Tests 11→6, genutzte Coverage 21→14, Completeness 0.563→0.543. Die Story-Zahl (6) ankert die Testanzahl exakt (S konstant 6; L schwankt 6–15).</li>
+        <li><b>Repair beweist die Fehler-Natur:</b> bei L hebt Repair die SSR (0.667→0.889, 2 Runden), bei S bleibt sie 0.833→0.833 — S's Fehler sind <b>semantisch</b>: Der Login-Test wartet auf <code>button "Login"</code> mit dem erfundenen Konto <code>test@juice.sh/Test1234!</code>, das nie existiert. Kein Code-Fix kann das grün machen.</li>
+        <li><b>Halluzination L 0.084 vs. S 0.142:</b> L referenziert fast nur live Beobachtetes; S erfindet Testdaten und nutzt un-webfirst Checks wie <code>body.to_contain_text("1.99")</code> (vom Judge explizit moniert).</li>
+      </ul>
+      <div class="flag"><b>Erkenntnis:</b> L vs S misst „was kostet die Story-Bindung": Breite gegen anforderungs-gebundene Tiefe. In diesem Lauf ist die SSR-Strafe minimal — die Kosten liegen in Coverage und erfundenen Testdaten.</div>
+    </div>
+  </div>
+
+  <!-- Befunde je Pipeline -->
+  <h2 class="sec" id="befunde">Befunde je Pipeline <span class="tag">technische Einzelheiten aus Code &amp; Metadaten</span></h2>
+  <p class="q">Charakteristische Muster jeder Pipeline — jenseits der reinen Rangfolge.</p>
+  <div class="grid">
+    <div class="card col-6">
+      <h3>Element-Verlust: referenziert vs. genutzt</h3>
+      <p class="cap">statisch = im Code referenziert · genutzt = in <i>bestandenen</i> Tests. Die Lücke = Elemente in roten Tests.</p>
+      <canvas id="lostCov"></canvas>
+    </div>
+    <div class="card col-6" style="border-left:3px solid var(--c)">
+      <h3><span class="dot" style="background:var(--c)"></span>Skript_C — breit, aber leer</h3>
+      <ul class="why" style="margin-top:8px">
+        <li><b>30 Pfad-Szenarien, 32 Elemente, 0 Verifikation:</b> jedes endet auf <code>to_be_attached()</code>. 185 s Crawl für 9 States / 8 Edges / 212 entdeckte Elemente.</li>
+        <li><b>Brüchige Locators im Mix:</b> <code>#mat-input-0</code>, <code>app-chat-welcome-screen &gt; div &gt; …</code> — vom Judge als brittle CSS markiert.</li>
+        <li><b>Trotzdem nützlich:</b> sein 212-Locator-Katalog ist die Grounding-Grundlage für H (die H dann ignoriert).</li>
+      </ul>
+    </div>
+    <div class="card col-6" style="border-left:3px solid var(--l)">
+      <h3><span class="dot" style="background:var(--l)"></span>Skript_L — der ehrliche Explorer</h3>
+      <ul class="why" style="margin-top:8px">
+        <li><b>Beste Judge-Werte des Laufs</b> (Approp 0.894, Read 0.904, Halluc 0.084) und höchste FuncSuit (0.709): 19 Steps über 6 Seiten, benannte Tests, echte Sichtbarkeits-Assertions.</li>
+        <li><b>Repair wirkt</b> (0.667→0.889 in 2 Runden, 63 s) — L's Fehler sind mechanisch (Overlay/Toast), nicht semantisch.</li>
+        <li><b>Unberechenbare Schleife:</b> Testanzahl 6–15, Gen-Zeit-Std ±130 s — die freie Exploration ist der Preis für die Breite.</li>
+      </ul>
+    </div>
+    <div class="card col-6" style="border-left:3px solid var(--s)">
+      <h3><span class="dot" style="background:var(--s)"></span>Skript_S — diszipliniert, semantisch verwundbar</h3>
+      <ul class="why" style="margin-top:8px">
+        <li><b>Deterministische Form:</b> konstant 6 Story-Tests (US-1,2,3,5,6,7), saubere Struktur mit <code>re.compile</code>-URL-Checks; Postprocess fixte nur Regex-Syntax.</li>
+        <li><b>Semantischer Kardinalfehler:</b> Login mit erfundenem Konto → US-5 scheitert strukturell; Repair wirkungslos (0.833→0.833). Nur 1/50 Läufe komplett grün.</li>
+        <li><b>Judge-Abzüge</b> für <code>body.to_contain_text(…)</code>-Checks und fehlende Konto-Verifikation im Header (Correctness-Begründung).</li>
+      </ul>
+    </div>
+    <div class="card col-6" style="border-left:3px solid var(--h)">
+      <h3><span class="dot" style="background:var(--h)"></span>Skript_H — Grounding auf dem Papier</h3>
+      <ul class="why" style="margin-top:8px">
+        <li><b>Teuerste Pipeline (221 s), schwächste Werte:</b> 184.8 s Crawl + LLM, aber nur <code>pages_observed=1</code> und <code>agent_steps=10</code> — der Katalog ersetzt die Live-Sicht.</li>
+        <li><b>Halluzinierte Accessible Names trotz 212 Locators:</b> <code>"Email address"/"Password"/"Log in"</code>, <code>menuitem "Not yet a customer?"</code> — Startzustand <code>ssr_before_repair=0.333</code>, Repair wirkungslos.</li>
+        <li><b>Brüchige Exakt-Assertions</b> (voller Toast-Text) und höchste Hallucination (0.146) — das Gegenteil des früheren „katalog-engen" H.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Stabilität / Varianz -->
+  <h2 class="sec" id="varianz">Stabilität — wo ist die Streuung hoch, wo niedrig? <span class="tag">Variationskoeffizient = Std / Mittel</span></h2>
+  <p class="q">Niedriger Balken = stabiler über die 50 Läufe. Skript_C fehlt (deterministisch, 1×, null Varianz).</p>
+  <div class="grid">
+    <div class="card col-12">
+      <h3>Relative Streuung (CV in %) je Metrik &amp; Pipeline</h3>
+      <p class="cap">CV macht Metriken mit verschiedenen Einheiten vergleichbar · kürzer = stabiler · Gen-Zeit-CV aus den Auffälligkeiten-Mittelwerten</p>
+      <canvas id="cvChart"></canvas>
+    </div>
+    <div class="card col-12">
+      <ul class="why">
+        <li><b>Skript_S — formstabil, ergebnisstabil:</b> Testanzahl CV 0 % (immer 6), und mit SSR-CV 29 % / Completeness-CV 25 % sogar der <i>stabilste</i> LLM-Kandidat im Ergebnis. Nur die Gen-Zeit streut stark (70 %).</li>
+        <li><b>Skript_H — instabil, wo es zählt:</b> höchste CVs bei SSR (40 %) und Completeness (41 %) — die halluzinierten Locators treffen mal, mal nicht. Gen-Zeit dagegen stabil (33 %), dominiert vom konstanten Crawl-Anteil.</li>
+        <li><b>Skript_L — moderat mit Explorations-Rauschen:</b> Testanzahl 6–15 (CV 16 %), Gen-Zeit-CV 45 % — die agentische Schleife läuft mal kurz, mal lang.</li>
+        <li><b>Flakiness ist überall minimal</b> (≤0.014): die Streuung kommt aus der <i>Generierung</i>, nicht aus instabiler Ausführung desselben Codes.</li>
+      </ul>
+      <div class="flag"><b>Muster:</b> Instabilität sitzt dort, wo eine Pipeline ohne Live-Anker rät (H's Locator-Namen) oder frei exploriert (L's Umfang). Story-Bindung (S) stabilisiert Form <i>und</i> Ergebnis — das ist neu gegenüber dem e6901d-Lauf.</div>
+    </div>
+  </div>
+
+  <!-- 5) Roter Faden -->
+  <h2 class="sec" id="synth">⑤ Roter Faden</h2>
+  <div class="card col-12" style="margin-top:14px">
+    <ul class="take">
+      <li><span class="pill">1</span><b>„Vacuous green" bleibt Hauptbefund für C:</b> SSR 1.000 über 30 Smoke-Tests, Appropriateness 0.400. Pass-Rate und Assertion-Stärke immer zusammen lesen.</li>
+      <li><span class="pill">2</span><b>Grounding ohne Enforcement schadet:</b> H bekommt 212 Locators und halluziniert trotzdem Namen → niedrigster SSR (0.470), höchste Kosten (221 s inkl. Crawl). Der Katalog muss die Locator-Wahl hart beschränken, nicht nur als Kontext dienen.</li>
+      <li><span class="pill">3</span><b>Live-DOM schlägt Crawler-Map</b> (S &gt; H auf allen Achsen) und <b>der LLM-Agent schlägt den Crawler qualitativ</b> (L FuncSuit 0.709 vs. 0.600) — beide Methoden-Duelle gehen an die Live-Pipelines.</li>
+      <li><span class="pill">4</span><b>Repair heilt mechanisch, nicht semantisch:</b> L 0.667→0.889, aber S 0.833→0.833 (erfundenes Konto) und H 0.333→0.333 (erfundene Namen). Meta-<code>before=after</code> ist der Marker für semantische Fehler.</li>
+      <li><span class="pill">5</span><b>Umgebungsrauschen drückt alle LLM-SSR:</b> Error-Toast <code>Force page reload</code> und Welcome-Banner erzeugen ±0.16–0.19 Streuung bei identischer Aufgabenstellung.</li>
+      <li><span class="pill">6</span><b>Fazit:</b> Qualitativ gewinnen <b>L</b> (Methode 1, FuncSuit 0.709) und <b>S</b> (Methode 2, 0.656 + bester LLM-SSR 0.550 + 42 s). H lohnt sich in dieser Form nicht.</li>
+    </ul>
+  </div>
+
+  <!-- Table -->
+  <h2 class="sec" id="tbl">Datentabelle — 50 Wiederholungen</h2>
+  <p class="sec-sub">Judge/FuncSuit nur innerhalb einer Methode vergleichen (C↔L, S↔H). Bestwert je Zeile nur informativ hervorgehoben.</p>
+  <div class="card col-12" style="margin-top:12px;overflow-x:auto"><table id="fullTbl"></table></div>
+
+  <footer>Quelle: ergebnis_20260709-214648_juiceshop_d66cf0.md · 50 Wiederholungen · ± = Std · C deterministisch (1×) · n/a = nicht anwendbar</footer>
+</div>
+
+<script>
+Chart.defaults.color='#9aa3c0';
+Chart.defaults.font.family=getComputedStyle(document.body).fontFamily;
+const grid={color:'#2a3155'};
+const COL={C:'#5b8def',L:'#48c78e',S:'#f5a623',H:'#e0518a'};
+const fill=c=>c+'44';
+
+const errBars={id:'errBars',afterDatasetsDraw(chart){const {ctx,scales}=chart;
+  chart.data.datasets.forEach((ds,di)=>{if(!ds._err)return;const meta=chart.getDatasetMeta(di);
+    const yid=ds.yAxisID||'y';const y=scales[yid]; if(!y)return;
+    ctx.save();ctx.strokeStyle='#e8ebf5';ctx.lineWidth=1.3;
+    meta.data.forEach((bar,i)=>{const e=ds._err[i];if(!e)return;const x=bar.x,
+      top=y.getPixelForValue(ds.data[i]+e),bot=y.getPixelForValue(Math.max(0,ds.data[i]-e));
+      ctx.beginPath();ctx.moveTo(x,top);ctx.lineTo(x,bot);ctx.moveTo(x-4,top);ctx.lineTo(x+4,top);
+      ctx.moveTo(x-4,bot);ctx.lineTo(x+4,bot);ctx.stroke();});ctx.restore();});}};
+Chart.register(errBars);
+
+// 1) C vs L radar
+new Chart(document.getElementById('clRadar'),{type:'radar',data:{
+  labels:['SSR','Completeness','Correctness','Appropriateness','Readability'],
+  datasets:[
+    {label:'C',data:[1.000,0.500,0.800,0.400,0.400],borderColor:COL.C,backgroundColor:fill(COL.C),pointBackgroundColor:COL.C,borderWidth:2},
+    {label:'L',data:[0.523,0.563,0.816,0.894,0.904],borderColor:COL.L,backgroundColor:fill(COL.L),pointBackgroundColor:COL.L,borderWidth:2}
+  ]},options:{scales:{r:{min:0,max:1,grid,angleLines:grid,pointLabels:{font:{size:11}},ticks:{stepSize:0.25,backdropColor:'transparent'}}},
+    plugins:{legend:{position:'bottom',labels:{boxWidth:12,padding:12}}}}});
+
+// 1) C vs L bars
+new Chart(document.getElementById('clBars'),{type:'bar',data:{
+  labels:['SSR','Completeness','Appropriateness','Readability','FuncSuit'],
+  datasets:[
+    {label:'C',data:[1.000,0.500,0.400,0.400,0.600],backgroundColor:COL.C,borderRadius:6,borderSkipped:false},
+    {label:'L',data:[0.523,0.563,0.894,0.904,0.709],_err:[0.174,0.193,0.037,0.040,0.085],backgroundColor:COL.L,borderRadius:6,borderSkipped:false}
+  ]},options:{plugins:{legend:{position:'bottom',labels:{boxWidth:12,padding:12}}},
+    scales:{y:{beginAtZero:true,max:1.05,grid},x:{grid:{display:false}}}}});
+
+// 2) S vs H radar
+new Chart(document.getElementById('shRadar'),{type:'radar',data:{
+  labels:['SSR','Completeness','Correctness','Appropriateness','Readability','Groundedness'],
+  datasets:[
+    {label:'S',data:[0.550,0.543,0.782,0.758,0.854,0.858],borderColor:COL.S,backgroundColor:fill(COL.S),pointBackgroundColor:COL.S,borderWidth:2},
+    {label:'H',data:[0.470,0.467,0.770,0.714,0.865,0.854],borderColor:COL.H,backgroundColor:fill(COL.H),pointBackgroundColor:COL.H,borderWidth:2}
+  ]},options:{scales:{r:{min:0,max:1,grid,angleLines:grid,pointLabels:{font:{size:11}},ticks:{stepSize:0.25,backdropColor:'transparent'}}},
+    plugins:{legend:{position:'bottom',labels:{boxWidth:12,padding:12}}}}});
+
+// 2) S vs H bars (SSR + gen time dual axis)
+new Chart(document.getElementById('shBars'),{type:'bar',data:{labels:['Skript_S','Skript_H'],datasets:[
+  {label:'SSR',data:[0.550,0.470],_err:[0.162,0.190],backgroundColor:'#7c5cff',borderRadius:6,borderSkipped:false,yAxisID:'y'},
+  {label:'Gen-Zeit (s)',data:[42.1,221.1],_err:[73.6,73.8],backgroundColor:'#5b8def',borderRadius:6,borderSkipped:false,yAxisID:'y1'}
+]},options:{plugins:{legend:{position:'bottom',labels:{boxWidth:12,padding:12}}},
+  scales:{y:{beginAtZero:true,max:1.05,grid,position:'left',title:{display:true,text:'SSR'}},
+    y1:{beginAtZero:true,max:320,grid:{drawOnChartArea:false},position:'right',title:{display:true,text:'Gen-Zeit (s)'}},
+    x:{grid:{display:false}}}}});
+
+// 3) 4-way SSR
+new Chart(document.getElementById('ssr4'),{type:'bar',data:{labels:['C','L','S','H'],
+  datasets:[{data:[1.000,0.523,0.550,0.470],_err:[0,0.174,0.162,0.190],
+    backgroundColor:[COL.C,COL.L,COL.S,COL.H],borderRadius:7,borderSkipped:false}]},
+  options:{plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' SSR '+c.parsed.y}}},
+    scales:{y:{beginAtZero:true,max:1.1,grid},x:{grid:{display:false}}}}});
+
+// 3) 4-way completeness
+new Chart(document.getElementById('comp4'),{type:'bar',data:{labels:['C','L','S','H'],
+  datasets:[{data:[0.500,0.563,0.543,0.467],_err:[0,0.193,0.134,0.193],
+    backgroundColor:[COL.C,COL.L,COL.S,COL.H],borderRadius:7,borderSkipped:false}]},
+  options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,max:0.85,grid},x:{grid:{display:false}}}}});
+
+// 4) L vs S
+new Chart(document.getElementById('lsA'),{type:'bar',data:{labels:['SSR','Completeness'],datasets:[
+  {label:'L',data:[0.523,0.563],_err:[0.174,0.193],backgroundColor:COL.L,borderRadius:6,borderSkipped:false},
+  {label:'S',data:[0.550,0.543],_err:[0.162,0.134],backgroundColor:COL.S,borderRadius:6,borderSkipped:false}
+]},options:{plugins:{legend:{position:'bottom',labels:{boxWidth:12,padding:12}}},
+  scales:{y:{beginAtZero:true,max:1.05,grid},x:{grid:{display:false}}}}});
+
+new Chart(document.getElementById('lsB'),{type:'bar',data:{labels:['# Tests','genutzte Coverage'],datasets:[
+  {label:'L',data:[11,21],_err:[1.785,6.723],backgroundColor:COL.L,borderRadius:6,borderSkipped:false},
+  {label:'S',data:[6,14],_err:[0,3.664],backgroundColor:COL.S,borderRadius:6,borderSkipped:false}
+]},options:{plugins:{legend:{position:'bottom',labels:{boxWidth:12,padding:12}}},
+  scales:{y:{beginAtZero:true,grid},x:{grid:{display:false}}}}});
+
+// Befunde: element loss (static vs exercised)
+new Chart(document.getElementById('lostCov'),{type:'bar',data:{labels:['C','L','S','H'],datasets:[
+  {label:'statisch (referenziert)',data:[32,37,20,20],_err:[0,4.851,2.235,2.047],backgroundColor:'#3a5f9e',borderRadius:6,borderSkipped:false},
+  {label:'genutzt (bestandene Tests)',data:[32,21,14,11],_err:[0,6.723,3.664,4.599],backgroundColor:'#48c78e',borderRadius:6,borderSkipped:false}
+]},options:{plugins:{legend:{position:'bottom',labels:{boxWidth:12,padding:12}},
+  tooltip:{callbacks:{afterBody:items=>{const i=items[0].dataIndex;const st=[32,37,20,20][i],ex=[32,21,14,11][i];
+    return 'Verlust an rote Tests: '+(st-ex);}}}},
+  scales:{y:{beginAtZero:true,grid,title:{display:true,text:'distinkte Elemente'}},x:{grid:{display:false}}}}});
+
+// Varianz: coefficient of variation (%) per metric, grouped by pipeline
+new Chart(document.getElementById('cvChart'),{type:'bar',data:{
+  labels:['SSR','# Tests','FuncSuit','Completeness','Gen-Zeit'],
+  datasets:[
+    {label:'L',data:[33,16,12,34,45],backgroundColor:COL.L,borderRadius:5,borderSkipped:false},
+    {label:'S',data:[29,0,14,25,70],backgroundColor:COL.S,borderRadius:5,borderSkipped:false},
+    {label:'H',data:[40,0,19,41,33],backgroundColor:COL.H,borderRadius:5,borderSkipped:false}
+  ]},options:{plugins:{legend:{position:'bottom',labels:{boxWidth:12,padding:12}},
+    tooltip:{callbacks:{label:c=>` ${c.dataset.label}: CV ${c.parsed.y} %`}}},
+    scales:{y:{beginAtZero:true,grid,title:{display:true,text:'Variationskoeffizient (%) — kürzer = stabiler'}},x:{grid:{display:false}}}}});
+
+// full table (order C,L,S,H)
+const rows=[
+  ['Gen-Zeit (s) ↓',['185.0','57.8 ± 130.5','42.1 ± 73.6','221.1 ± 73.8'],[185.0,57.8,42.1,221.1],'min'],
+  ['# Tests',['30','11 ± 1.8 (6–15)','6','6'],null,null],
+  ['SSR ↑',['1.000','0.523 ± 0.174','0.550 ± 0.162','0.470 ± 0.190'],[1.0,0.523,0.550,0.470],'max'],
+  ['Element-Cov. genutzt ↑',['32','21 ± 6.7','14 ± 3.7','11 ± 4.6'],[32,21,14,11],'max'],
+  ['Element-Cov. statisch',['32','37 ± 4.9','20 ± 2.2','20 ± 2.0'],null,null],
+  ['Flakiness ↓',['0.000','0.014 ± 0.035','0.007 ± 0.033','0.000'],[0.0,0.014,0.007,0.0],'min'],
+  ['Laufzeit (s) ↓',['13.2','29.6 ± 10.5','20.9 ± 14.5','26.2 ± 16.0'],[13.2,29.6,20.9,26.2],'min'],
+  ['— Judge (nur innerhalb Methode) —',['','','',''],null,null],
+  ['Judge Correctness ↑',['0.800','0.816 ± 0.098','0.782 ± 0.134','0.770 ± 0.128'],null,null],
+  ['Judge Appropriateness ↑',['0.400','0.894 ± 0.037','0.758 ± 0.140','0.714 ± 0.160'],null,null],
+  ['Judge Hallucination ↓',['n/a','0.084 ± 0.065','0.142 ± 0.162','0.146 ± 0.197'],null,null],
+  ['Judge Readability ↑',['0.400','0.904 ± 0.040','0.854 ± 0.068','0.865 ± 0.066'],null,null],
+  ['— ISO 25010 —',['','','',''],null,null],
+  ['ISO Correctness ↑',['0.900','0.670 ± 0.102','0.666 ± 0.102','0.620 ± 0.115'],null,null],
+  ['ISO Completeness ↑',['0.500','0.563 ± 0.193','0.543 ± 0.134','0.467 ± 0.193'],[0.500,0.563,0.543,0.467],'max'],
+  ['ISO Functional Suitability ↑',['0.600','0.709 ± 0.085','0.656 ± 0.094','0.600 ± 0.115'],null,null],
+];
+const t=document.getElementById('fullTbl');
+t.innerHTML='<thead><tr><th>Metrik</th><th>Skript_C</th><th>Skript_L</th><th>Skript_S</th><th>Skript_H</th></tr></thead>';
+const tb=document.createElement('tbody');
+rows.forEach(([lbl,cells,nums,dir])=>{
+  const tr=document.createElement('tr');let best=null;
+  if(nums&&dir)best=dir==='min'?Math.min(...nums):Math.max(...nums);
+  let html=`<td>${lbl}</td>`;
+  cells.forEach((c,i)=>{const w=(nums&&best!=null&&nums[i]===best)?' class="win"':'';html+=`<td${w}>${c}</td>`;});
+  tr.innerHTML=html;
+  if(lbl.startsWith('—')){tr.style.color='#8a93b0';tr.style.fontSize='11.5px';}
+  tb.appendChild(tr);
+});
+t.appendChild(tb);
+</script>
+</body>
+</html>
