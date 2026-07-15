@@ -9,6 +9,10 @@ Each sub-characteristic is in [0, 1] and combines an objective signal with a
 semantic signal where both are available.
 
 Design notes (addressing known metric pitfalls):
+- **No characteristic-level score.** ISO/IEC 25023 measures Functional
+  Suitability only at sub-characteristic level; a combined value would need an
+  explicit, justified weighting per ISO/IEC 25040. The three values below are
+  therefore reported side by side, never averaged into one number.
 - **Completeness uses *exercised* coverage** (distinct locators in PASSING tests),
   not the static locator count, so hallucinated locators in failing tests do not
   inflate it.

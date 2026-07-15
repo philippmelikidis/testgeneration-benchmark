@@ -118,16 +118,14 @@ for col, row, result in zip(cols, rows, results):
     with col:
         st.markdown(f"**{row['script']}**  \n`{row['pipeline']}` · {result.n_runs}×")
         if record_evaluated:
-            st.metric("ISO Functional Suitability", ui.fmt(row["iso_overall"]))
+            # Functional Suitability per ISO/IEC 25023: sub-characteristics
+            # only, no combined score (see Iso25010 docstring).
+            st.metric("ISO Correctness", ui.fmt(row["iso_correctness"]))
+            st.metric("ISO Completeness", ui.fmt(row["iso_completeness"]))
+            st.metric("ISO Appropriateness", ui.fmt(row["iso_appropriateness"]))
             st.metric("Ausführbar / grün",
                       f"{ui.fmt(row['executed'])} / {ui.fmt(row['passed'])}")
             st.metric("SSR", ui.fmt(row["ssr"]))
-            # ISO sub-characteristics at a glance (Completeness etc.).
-            st.caption(
-                f"ISO Correctness: **{ui.fmt(row['iso_correctness'])}**  \n"
-                f"ISO Completeness: **{ui.fmt(row['iso_completeness'])}**  \n"
-                f"ISO Appropriateness: **{ui.fmt(row['iso_appropriateness'])}**"
-            )
         else:
             st.metric("Status", "nicht bewertet")
             st.caption("Nur Generierung — keine Ausführungs-/Judge-Metriken.")
@@ -169,6 +167,8 @@ if anomaly_results:
 
 # --- ISO breakdown chart --------------------------------------------------- #
 st.markdown("### ISO/IEC 25010 — Functional Suitability")
+st.caption("Gemessen nach ISO/IEC 25023 auf Subcharakteristik-Ebene — der "
+           "Standard definiert bewusst keinen kombinierten Gesamtwert.")
 iso_long = []
 for row in rows:
     for sub, key in [
