@@ -83,11 +83,27 @@ In-Process-Playwright-Backend zurück; das tatsächlich genutzte Backend steht i
 
 ### 1. Python-Umgebung
 
+**macOS / Linux:**
+
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 playwright install chromium
 ```
+
+**Windows (PowerShell):**
+
+```powershell
+py -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+playwright install chromium
+```
+
+> Windows-Hinweise: In der klassischen `cmd.exe` stattdessen
+> `.venv\Scripts\activate.bat` aufrufen. Blockiert PowerShell das Skript
+> („running scripts is disabled"), einmalig
+> `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` setzen.
 
 **Node.js 18+ (für das Agent-MCP-Backend).** Der LLM-Agent nutzt standardmäßig
 den offiziellen Playwright-MCP-Server, der per `npx @playwright/mcp@latest`
@@ -102,7 +118,7 @@ das explizit).
 **Ollama (Default, kostenlos, lokal)** — Daemon starten und Modelle ziehen:
 
 ```bash
-ollama serve &
+ollama serve &                 # Windows: läuft nach Install als Hintergrund-App
 ollama pull qwen2.5-coder:7b   # Generierung
 ollama pull qwen2.5:14b        # Judge (stärkeres Modell empfohlen)
 ```
@@ -143,7 +159,8 @@ Laufzeit ist reine Playwright-Exploration ohne LLM.
 `.env` aus `.env.example` kopieren und anpassen:
 
 ```bash
-cp .env.example .env
+cp .env.example .env        # macOS / Linux
+copy .env.example .env      # Windows
 ```
 
 ### 3. Ziel-Anwendung
