@@ -6,6 +6,12 @@ zugehörigen JSON-Record generiert (`tcgen.orchestration.report.record_to_markdo
 und enthält Metriken **plus** die tatsächlich generierten Test-Skripte je Pipeline
 (C = Crawler, L = LLM-Agent, S = LLM-Agent + Story, H = Hybrid).
 
+Die zugehörigen **Roh-Records** (JSON) liegen zum direkten Herunterladen unter
+`../results/` und lassen sich mit dem CLI/Streamlit-UI erneut auswerten:
+`results/20260707-212947_juiceshop_25a1d1.json` (01),
+`results/20260709-214648_juiceshop_d66cf0.json` (02),
+`results/20260710-082622_todomvc_515845.json` (03).
+
 | Bericht | App | Reps | Stand | Rolle |
 |---|---|---|---|---|
 | [01_juiceshop_50reps_fruehe_baseline.md](01_juiceshop_50reps_fruehe_baseline.md) | Juice Shop | 50 | 07.07. | Frühe Baseline — vor Backdrop-/Prompt-/Story-Fixes (Hybrid noch schwach, H≈0.38) |

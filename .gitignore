@@ -21,6 +21,10 @@ results/*.json
 results/jobs/
 !generated/.gitkeep
 !results/.gitkeep
+# Kuratierte Roh-Records zu den Berichten unter reports/ (bewusst eingecheckt)
+!results/20260707-212947_juiceshop_25a1d1.json
+!results/20260709-214648_juiceshop_d66cf0.json
+!results/20260710-082622_todomvc_515845.json
 test-results/
 
 # Crawlee runtime scratch (request queues, key-value stores)

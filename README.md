@@ -326,7 +326,13 @@ LLM-Generierung (Temperatur niedrig, Wiederholungen erwägen).
   (ISO/IEC 25010) beruht.
 - `reports/` — kuratierte Ergebnisberichte als Verlauf (frühe Baseline → finaler
   Referenzlauf, inkl. TodoMVC-Generalisierung); siehe [`reports/README.md`](reports/README.md).
+- `results/` — die zu den Berichten gehörenden **Roh-Records** (JSON) zum direkten
+  Herunterladen und erneuten Auswerten im UI/CLI:
+  - [`results/20260707-212947_juiceshop_25a1d1.json`](results/20260707-212947_juiceshop_25a1d1.json) — frühe Baseline (Bericht 01)
+  - [`results/20260709-214648_juiceshop_d66cf0.json`](results/20260709-214648_juiceshop_d66cf0.json) — finaler Referenzlauf (Bericht 02)
+  - [`results/20260710-082622_todomvc_515845.json`](results/20260710-082622_todomvc_515845.json) — Generalisierung (Bericht 03)
 
-Rohdaten der Läufe (`results/*.json`), generierte Skripte (`generated/`) und
-Crawlee-Scratch (`storage/`) sind bewusst **nicht** eingecheckt — sie entstehen
-reproduzierbar beim Ausführen.
+Nur diese drei Records sind bewusst eingecheckt. Die übrigen Rohdaten der Läufe
+(`results/*.json`), generierte Skripte (`generated/`) und Crawlee-Scratch
+(`storage/`) bleiben **nicht** eingecheckt — sie entstehen reproduzierbar beim
+Ausführen.
